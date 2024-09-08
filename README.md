@@ -1,4 +1,4 @@
-надо засунуть файл .asm внутрь папки .../TASM/TASM
+надо засунуть файл .asm внутрь папки ...\TASM\TASM
 
 mount D C:\Users\...\Downloads\TASM\TASM
 D:\
