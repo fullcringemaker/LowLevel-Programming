@@ -11,13 +11,9 @@ start:
     mov DS, AX
 
     mov SI, 0
-
     mov AX, word ptr arr[SI]    
-
     add SI, 2                   
-
     mov CX, word ptr arr_size    
-
     dec CX        
                   
 process_array:
