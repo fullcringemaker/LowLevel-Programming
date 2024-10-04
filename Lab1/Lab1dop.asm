@@ -1,9 +1,9 @@
 assume CS:code, DS:data
 data segment
-    a db 15                ; a = 1
+    a db 15               ; a = 15
     b db 2                ; b = 2
-    d db 25               ; d = 4
-    c db 4             ; c = 3
+    d db 25               ; d = 25
+    c db 4                ; c = 4
     str db '000 00h','$'   ; строка для вывода результата
 data ends
 
