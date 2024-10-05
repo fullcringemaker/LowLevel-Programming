@@ -1,4 +1,4 @@
-assume CS:code, DS:data
+assume CS:code, DS:data 
 
 data segment
     a db 1                ; a = 1
