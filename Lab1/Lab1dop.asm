@@ -1,9 +1,9 @@
 assume cs:code, ds:data
 data segment
-    a dw 17
-    b dw 2
+    a dw 159
+    b dw 15
     c dw 4
-    d dw 32
+    d dw 78
     result dw 0
     buffer db 6 dup(0)
     hex_buffer db 5 dup(0)
@@ -77,7 +77,8 @@ hex_output:
     cmp ax, 0
     jne hex_convert_loop
     mov byte ptr [bx], '0'
-    mov byte ptr [bx+1], '$'
+    mov byte ptr [bx+1], 'h'
+    mov byte ptr [bx+2], '$'
     mov dx, bx
     mov ah, 09h
     int 21h
@@ -100,7 +101,9 @@ hex_digit:
     inc bx
     mov si, cx
     add si, bx
-    mov byte ptr [si], '$'
+    mov byte ptr [si], 'h'       
+    inc si                       
+    mov byte ptr [si], '$'       
     mov dx, bx
     mov ah, 09h
     int 21h
