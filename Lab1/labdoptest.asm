@@ -1,104 +1,112 @@
 data segment
-    a db 1                 ; a = 1
-    b db 2                 ; b = 2
-    d db 4                 ; d = 4
-    c db 3                 ; c = 3
-    str db 5 dup ('?'), ' ', 4 dup ('?'), 'h', '$'  ; Место для результата
+    a db 1
+    b db 2
+    d db 4
+    c db 3
+    str db 20 dup (?), '$'  ; буфер для результата
 data ends
 
 code segment
 start:
-    mov ax, data           ; Загрузка адреса сегмента данных в AX
-    mov ds, ax             ; Установка DS на сегмент данных
+    mov ax, data          ; загрузка адреса сегмента данных в AX
+    mov ds, ax            ; установка DS на сегмент данных
 
-    ; Вычисление результата и сохранение в CX
-    mov al, a              ; AL = a
-    mov bl, b              ; BL = b
-    mov ah, 0              ; Обнуление AH для деления
-    div bl                 ; AX = AX / BL, AL = частное, AH = остаток
-    mov cx, ax             ; CX = частное от первого деления
+    ; Вычисление BH как в исходном коде
+    mov al, a             ; AL = a
+    mov bl, b             ; BL = b
+    mov ah, 0             ; обнуление AH для деления
+    div bl                ; AL = AL / BL
+    mov bh, al            ; BH = результат первого деления
 
-    mov al, d              ; AL = d
-    mov bl, c              ; BL = c
-    mov ah, 0              ; Обнуление AH для деления
-    div bl                 ; AX = AX / BL
-    add cx, ax             ; CX = CX + частное от второго деления
-    sub cx, 1              ; CX = CX - 1
+    mov al, d             ; AL = d
+    mov bl, c             ; BL = c
+    mov ah, 0             ; обнуление AH для деления
+    div bl                ; AL = AL / BL
+    add bh, al            ; BH += результат второго деления
 
-    ; Преобразование CX в десятичный формат и сохранение в str[0..4]
-    mov si, offset str + 4 ; SI указывает на последнюю десятичную цифру в str
-    mov ax, cx             ; Перенос результата в AX
+    sub bh, 1             ; BH -= 1
+
+    ; Перенос BH в AX для преобразования
+    mov ax, 0
+    mov al, bh
+
+    ; Инициализация SI для указания на конец буфера
+    lea si, [str + 19]    ; SI = адрес последнего символа в str
+
+    ; Преобразование AX в десятичную строку
+    mov bx, 10            ; делитель для десятичного преобразования
+
+dec_conv_loop:
+    mov dx, 0
+    div bx                ; AX = AX / 10, DX = остаток
+    add dl, '0'           ; преобразование остатка в ASCII
+    mov [si], dl          ; сохранение цифры в буфере
+    sub si, 1             ; переход к предыдущей позиции
     cmp ax, 0
-    jne dec_convert_start
-    ; Обработка случая нуля
-    mov byte ptr [si], '0'
-    sub si, 1
-    jmp dec_fill_zero
+    jne dec_conv_loop     ; повторить, если AX > 0
 
-dec_convert_start:
-dec_convert_loop:
-    mov dx, 0              ; Обнуление DX для деления
-    mov bx, 10             ; Делитель 10
-    div bx                 ; AX = AX / 10, DX = остаток
-    add dl, '0'            ; Преобразование цифры в ASCII
-    mov [si], dl           ; Сохранение цифры в str
-    sub si, 1              ; Уменьшение SI
+    ; Обработка случая, когда AX был нулевым
+    cmp dl, '0'
+    jne dec_conv_done
+    cmp [si + 1], '0'
+    jne dec_conv_done
+    mov [si], '0'
+    sub si, 1
+
+dec_conv_done:
+    ; Вставка пробела между десятичным и шестнадцатеричным числами
+    mov [si], ' '
+    sub si, 1
+
+    ; Перезагрузка BH в AX для шестнадцатеричного преобразования
+    mov ax, 0
+    mov al, bh
+
+    ; Преобразование AX в шестнадцатеричную строку
+    mov bx, 16            ; делитель для шестнадцатеричного преобразования
+
+hex_conv_loop:
+    mov dx, 0
+    div bx                ; AX = AX / 16, DX = остаток
+    cmp dx, 10
+    jl hex_digit_num
+    add dl, 55            ; преобразование 10-15 в 'A'-'F'
+    jmp hex_digit_done
+hex_digit_num:
+    add dl, '0'           ; преобразование 0-9 в '0'-'9'
+hex_digit_done:
+    mov [si], dl          ; сохранение цифры в буфере
+    sub si, 1             ; переход к предыдущей позиции
     cmp ax, 0
-    jne dec_convert_loop
+    jne hex_conv_loop     ; повторить, если AX > 0
 
-dec_fill_zero:
-    cmp si, offset str
-    jl dec_conversion_done
-    mov byte ptr [si], '0' ; Заполнение ведущих нулей
+    ; Обработка случая, когда AX был нулевым
+    cmp dl, '0'
+    jne hex_conv_done
+    cmp [si + 1], '0'
+    jne hex_conv_done
+    mov [si], '0'
     sub si, 1
-    jmp dec_fill_zero
 
-dec_conversion_done:
-
-    ; Преобразование CX в шестнадцатеричный формат и сохранение в str[6..9]
-    mov si, offset str + 9 ; SI указывает на последнюю шестнадцатеричную цифру в str
-    mov ax, cx             ; Перенос результата в AX
-    cmp ax, 0
-    jne hex_convert_start
-    ; Обработка случая нуля
-    mov byte ptr [si], '0'
+hex_conv_done:
+    ; Вставка 'h' в конце шестнадцатеричного числа
+    mov [si], 'h'
     sub si, 1
-    jmp hex_fill_zero
 
-hex_convert_start:
-hex_convert_loop:
-    mov dx, 0              ; Обнуление DX для деления
-    mov bx, 16             ; Делитель 16
-    div bx                 ; AX = AX / 16, DX = остаток
-    cmp dl, 9
-    jg hex_alpha
-    add dl, '0'            ; Преобразование 0-9 в ASCII
-    jmp hex_store_digit
-hex_alpha:
-    add dl, 'A' - 10       ; Преобразование 10-15 в 'A'-'F'
-hex_store_digit:
-    mov [si], dl           ; Сохранение цифры в str
-    sub si, 1              ; Уменьшение SI
-    cmp ax, 0
-    jne hex_convert_loop
+    ; Настройка SI на первый символ результата
+    add si, 1
 
-hex_fill_zero:
-    cmp si, offset str + 6
-    jl hex_conversion_done
-    mov byte ptr [si], '0' ; Заполнение ведущих нулей
-    sub si, 1
-    jmp hex_fill_zero
+    ; Убедиться, что буфер заканчивается на '$'
+    mov byte ptr [str + 20], '$'
 
-hex_conversion_done:
-
-    ; Пробел и 'h' уже находятся на своих местах в str
-    ; Вывод результата
-    mov dx, offset str
-    mov ah, 09h            ; Функция DOS для вывода строки
-    int 21h                ; Вызов DOS-прерывания
+    ; Вывод строки с результатом
+    mov dx, si            ; DX = адрес строки с результатом
+    mov ah, 09h           ; функция DOS для отображения строки
+    int 21h               ; вызов прерывания DOS
 
     ; Завершение программы
-    mov ah, 4Ch            ; Функция DOS для завершения программы
-    int 21h                ; Вызов DOS-прерывания
+    mov ah, 4Ch           ; функция DOS для выхода из программы
+    int 21h               ; вызов прерывания DOS
+
 code ends
 end start
