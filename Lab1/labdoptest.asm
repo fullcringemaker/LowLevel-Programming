@@ -1,112 +1,85 @@
+assume CS:code, DS:data
 data segment
-    a db 1
-    b db 2
-    d db 4
-    c db 3
-    str db 20 dup (?), '$'  ; буфер для результата
+    a db 1                ; a = 1
+    b db 2                ; b = 2
+    d db 4                ; d = 4
+    c db 3                ; c = 3
+    str db '000 00h','$'   
 data ends
 
 code segment
 start:
-    mov ax, data          ; загрузка адреса сегмента данных в AX
-    mov ds, ax            ; установка DS на сегмент данных
+    mov AX, data          
+    mov DS, AX            
 
-    ; Вычисление BH как в исходном коде
-    mov al, a             ; AL = a
-    mov bl, b             ; BL = b
-    mov ah, 0             ; обнуление AH для деления
-    div bl                ; AL = AL / BL
-    mov bh, al            ; BH = результат первого деления
+    mov al, a     ;al = 1
+    mov bl, b     ;bl = 2
+    mov ah, 0     ;обнуление ah
+    div bl        ;al = 1/2 = 0, ah = 1 mod 2 = 1
+    mov bh, al    ;bh = 0
 
-    mov al, d             ; AL = d
-    mov bl, c             ; BL = c
-    mov ah, 0             ; обнуление AH для деления
-    div bl                ; AL = AL / BL
-    add bh, al            ; BH += результат второго деления
+    mov al, d     ;al = 1
+    mov bl, c     ;bl= 3
+    mov ah, 0 
+    div bl        ;al= 4/3 = 1, ah = 4 mod 3 = 1
+    add bh, al    ;bh = bh+al=0+1=1
+    
+    sub bh, 1     ;bh=bh-1=0
 
-    sub bh, 1             ; BH -= 1
 
-    ; Перенос BH в AX для преобразования
-    mov ax, 0
-    mov al, bh
+    mov ax, 0             
+    mov al, bh            
+    mov ah, 0             
+    mov bl, 100           
+    div bl                
+    add al, '0'           
+    mov [str], al         
 
-    ; Инициализация SI для указания на конец буфера
-    lea si, [str + 19]    ; SI = адрес последнего символа в str
+    mov al, ah            
+    mov ah, 0             
+    mov bl, 10            
+    div bl                
+    add al, '0'           
+    mov [str+1], al       
 
-    ; Преобразование AX в десятичную строку
-    mov bx, 10            ; делитель для десятичного преобразования
+    mov al, ah            
+    add al, '0'           
+    mov [str+2], al       
 
-dec_conv_loop:
-    mov dx, 0
-    div bx                ; AX = AX / 10, DX = остаток
-    add dl, '0'           ; преобразование остатка в ASCII
-    mov [si], dl          ; сохранение цифры в буфере
-    sub si, 1             ; переход к предыдущей позиции
-    cmp ax, 0
-    jne dec_conv_loop     ; повторить, если AX > 0
+    mov al, bh     
+    mov ah, 0             
+    mov bl, 16            
+    div bl                
 
-    ; Обработка случая, когда AX был нулевым
-    cmp dl, '0'
-    jne dec_conv_done
-    cmp [si + 1], '0'
-    jne dec_conv_done
-    mov [si], '0'
-    sub si, 1
+    cmp al, 10           
+    jb hex_high_is_num    
+    add al, 55            
+    jmp hex_high_done    
+hex_high_is_num:
+    add al, '0'          
+hex_high_done:
+    mov [str+4], al       
 
-dec_conv_done:
-    ; Вставка пробела между десятичным и шестнадцатеричным числами
-    mov [si], ' '
-    sub si, 1
+    mov al, ah           
+    cmp al, 10            
+    jb hex_low_is_num     
+    add al, 55            
+    jmp hex_low_done     
+hex_low_is_num:
+    add al, '0'           
+hex_low_done:
+    mov [str+5], al
 
-    ; Перезагрузка BH в AX для шестнадцатеричного преобразования
-    mov ax, 0
-    mov al, bh
+    lea dx, str           
+    mov ah, 09h           
+    int 21h               
 
-    ; Преобразование AX в шестнадцатеричную строку
-    mov bx, 16            ; делитель для шестнадцатеричного преобразования
-
-hex_conv_loop:
-    mov dx, 0
-    div bx                ; AX = AX / 16, DX = остаток
-    cmp dx, 10
-    jl hex_digit_num
-    add dl, 55            ; преобразование 10-15 в 'A'-'F'
-    jmp hex_digit_done
-hex_digit_num:
-    add dl, '0'           ; преобразование 0-9 в '0'-'9'
-hex_digit_done:
-    mov [si], dl          ; сохранение цифры в буфере
-    sub si, 1             ; переход к предыдущей позиции
-    cmp ax, 0
-    jne hex_conv_loop     ; повторить, если AX > 0
-
-    ; Обработка случая, когда AX был нулевым
-    cmp dl, '0'
-    jne hex_conv_done
-    cmp [si + 1], '0'
-    jne hex_conv_done
-    mov [si], '0'
-    sub si, 1
-
-hex_conv_done:
-    ; Вставка 'h' в конце шестнадцатеричного числа
-    mov [si], 'h'
-    sub si, 1
-
-    ; Настройка SI на первый символ результата
-    add si, 1
-
-    ; Убедиться, что буфер заканчивается на '$'
-    mov byte ptr [str + 20], '$'
-
-    ; Вывод строки с результатом
-    mov dx, si            ; DX = адрес строки с результатом
-    mov ah, 09h           ; функция DOS для отображения строки
-    int 21h               ; вызов прерывания DOS
-
-    ; Завершение программы
-    mov ah, 4Ch           ; функция DOS для выхода из программы
-    int 21h               ; вызов прерывания DOS
-
+    mov AH, 4Ch           
+    int 21h               
 code ends
 end start
+
+Данный код выполняет свою задачу а именно осуществляет вывод ответа в десятиричном формате и, через пробел, в шестнадцатиричном формате, при этом на конце шестнадцатиричного числа была h.Также вывод осуществлялся без никаких дополнительных ненужных надписей или слов, выводится только 2 числа с теми условиями, что я указал в предыдущем предложении. 
+Однако есть один минус. Повтор кусков кода не является оптимальным универсальным методом (к тому же может не работать, если считать, что и переменные, и результат будет большей разрядности, чем байт). 
+
+Мне необходимо переделать данный код с использованием циклов. При этом переделанный вариант должен выполнять свою задачу, которую я указал ранее
