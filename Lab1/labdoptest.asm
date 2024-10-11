@@ -1,85 +1,72 @@
-assume CS:code, DS:data
 data segment
-    a db 1                ; a = 1
-    b db 2                ; b = 2
-    d db 4                ; d = 4
-    c db 3                ; c = 3
-    str db '000 00h','$'   
+    a dw 1
+    b dw 2
+    d dw 4
+    c dw 3
+    str db '000 00h','$'  ; Буфер для вывода
 data ends
 
 code segment
 start:
-    mov AX, data          
-    mov DS, AX            
+    mov ax, data
+    mov ds, ax
 
-    mov al, a     ;al = 1
-    mov bl, b     ;bl = 2
-    mov ah, 0     ;обнуление ah
-    div bl        ;al = 1/2 = 0, ah = 1 mod 2 = 1
-    mov bh, al    ;bh = 0
+    ; Вычисление (a / b) + (d / c) - 1
+    mov ax, [a]
+    mov dx, 0              ; Зануление DX вместо использования CWD
+    div word ptr [b]       ; AX = AX / [b], DX = AX mod [b]
+    mov bx, ax             ; BX = результат первого деления
 
-    mov al, d     ;al = 1
-    mov bl, c     ;bl= 3
-    mov ah, 0 
-    div bl        ;al= 4/3 = 1, ah = 4 mod 3 = 1
-    add bh, al    ;bh = bh+al=0+1=1
-    
-    sub bh, 1     ;bh=bh-1=0
+    mov ax, [d]
+    mov dx, 0
+    div word ptr [c]
+    add bx, ax             ; BX += результат второго деления
 
+    sub bx, 1              ; BX -= 1
 
-    mov ax, 0             
-    mov al, bh            
-    mov ah, 0             
-    mov bl, 100           
-    div bl                
-    add al, '0'           
-    mov [str], al         
+    ; Конвертация BX в десятичный формат и запись в str[0..2]
+    mov ax, bx
+    mov cx, 3              ; Количество цифр для вывода
+    lea si, [str + 2]      ; Указатель на позицию для записи цифр
 
-    mov al, ah            
-    mov ah, 0             
-    mov bl, 10            
-    div bl                
-    add al, '0'           
-    mov [str+1], al       
+dec_conv_loop:
+    mov dx, 0              ; Зануление DX вместо XOR
+    mov bx, 10
+    div bx                 ; AX = AX / 10, DX = остаток
+    add dl, '0'            ; Преобразование в ASCII
+    mov [si], dl
+    dec si
+    dec cx
+    jnz dec_conv_loop
 
-    mov al, ah            
-    add al, '0'           
-    mov [str+2], al       
+    ; Конвертация BX в шестнадцатеричный формат и запись в str[4..5]
+    mov ax, bx
+    mov cx, 2
+    lea si, [str + 5]
 
-    mov al, bh     
-    mov ah, 0             
-    mov bl, 16            
-    div bl                
+hex_conv_loop:
+    mov dx, 0
+    mov bx, 16
+    div bx                 ; AX = AX / 16, DX = остаток
+    mov al, dl             ; AL = остаток для обработки
+    cmp al, 10
+    jl hex_digit_is_num
+    add al, 'A' - 10
+    jmp hex_store_digit
+hex_digit_is_num:
+    add al, '0'
+hex_store_digit:
+    mov [si], al
+    dec si
+    dec cx
+    jnz hex_conv_loop
 
-    cmp al, 10           
-    jb hex_high_is_num    
-    add al, 55            
-    jmp hex_high_done    
-hex_high_is_num:
-    add al, '0'          
-hex_high_done:
-    mov [str+4], al       
+    ; Вывод строки
+    lea dx, str
+    mov ah, 09h
+    int 21h
 
-    mov al, ah           
-    cmp al, 10            
-    jb hex_low_is_num     
-    add al, 55            
-    jmp hex_low_done     
-hex_low_is_num:
-    add al, '0'           
-hex_low_done:
-    mov [str+5], al
-
-    lea dx, str           
-    mov ah, 09h           
-    int 21h               
-
-    mov AH, 4Ch           
-    int 21h               
+    mov ah, 4Ch
+    int 21h
 code ends
 end start
-
-Данный код выполняет свою задачу а именно осуществляет вывод ответа в десятиричном формате и, через пробел, в шестнадцатиричном формате, при этом на конце шестнадцатиричного числа была h.Также вывод осуществлялся без никаких дополнительных ненужных надписей или слов, выводится только 2 числа с теми условиями, что я указал в предыдущем предложении. 
-Однако есть один минус. Повтор кусков кода не является оптимальным универсальным методом (к тому же может не работать, если считать, что и переменные, и результат будет большей разрядности, чем байт). 
-
-Мне необходимо переделать данный код с использованием циклов. При этом переделанный вариант должен выполнять свою задачу, которую я указал ранее
