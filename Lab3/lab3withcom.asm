@@ -1,189 +1,204 @@
-assume CS:code, DS:data
+assume CS:code, DS:data     ; Указываем, что сегмент кода - code, сегмент данных - data
 
 data segment
-    ; Буферы для ввода строк
-    str_input1 db 20, 0, 20 dup(0) ; Первый байт - максимальная длина, второй - фактическая длина
-    str_input2 db 20, 0, 20 dup(0)
+    str_input1 db 20, 0, 20 dup(0)    ; Буфер для первой строки: макс. длина 20, фактическая длина 0, 20 байт для данных
+    str_input2 db 20, 0, 20 dup(0)    ; Буфер для второй строки: макс. длина 20, фактическая длина 0, 20 байт для данных
 
-    ten dw 10
+    ten dw 10                         ; Константа 10 для преобразования чисел
 
-    ; Сообщения для вывода
-    msg_null db 'null$', 0
-    msg_pos db 'Position: $', 0
-    num_buf db 5 dup(0), '$', 0  ; Буфер для хранения позиции в виде строки
+    msg_null db 'null$', 0            ; Сообщение 'null' с признаком конца строки '$'
+    msg_pos db 'Position: $', 0       ; Сообщение 'Position: ' с признаком конца строки '$'
+
+    num_buf db 5 dup(0), '$', 0       ; Буфер для вывода числа, 5 байт, затем '$' и нулевой байт
+
+    newline db 13, 10, '$'            ; Перенос строки: возврат каретки (13), перевод строки (10), признак конца строки '$'
 data ends
 
 code segment
 start:
-    mov ax, data
-    mov ds, ax
+    mov ax, data                      ; Загружаем адрес сегмента данных в AX
+    mov ds, ax                        ; Инициализируем сегмент данных DS
+
+    ; Выводим пустую строку для перехода на новую строку
+    mov ah, 09h                       ; Функция DOS 09h: вывод строки
+    lea dx, newline                   ; Адрес переноса строки в DX
+    int 21h                           ; Вызов прерывания DOS
 
     ; Ввод первой строки
-    lea dx, str_input1
-    mov ah, 0Ah
-    int 21h
+    lea dx, str_input1                ; Адрес буфера для первой строки в DX
+    mov ah, 0Ah                       ; Функция DOS 0Ah: ввод строки с буферизацией
+    int 21h                           ; Вызов прерывания DOS
+
+    ; Переход на новую строку после ввода первой строки
+    mov ah, 09h                       ; Функция DOS 09h: вывод строки
+    lea dx, newline                   ; Адрес переноса строки в DX
+    int 21h                           ; Вызов прерывания DOS
 
     ; Ввод второй строки
-    lea dx, str_input2
-    mov ah, 0Ah
-    int 21h
+    lea dx, str_input2                ; Адрес буфера для второй строки в DX
+    mov ah, 0Ah                       ; Функция DOS 0Ah: ввод строки с буферизацией
+    int 21h                           ; Вызов прерывания DOS
+
+    ; Переход на новую строку после ввода второй строки
+    mov ah, 09h                       ; Функция DOS 09h: вывод строки
+    lea dx, newline                   ; Адрес переноса строки в DX
+    int 21h                           ; Вызов прерывания DOS
 
     ; Подготовка аргументов для функции strpbrk
-    lea ax, str_input2 + 2  ; Адрес начала второй строки
-    push ax
-    lea ax, str_input1 + 2  ; Адрес начала первой строки
-    push ax
+    lea ax, str_input2 + 2            ; Адрес начала данных второй строки (после первых двух байт) в AX
+    push ax                           ; Помещаем адрес sym в стек
+    lea ax, str_input1 + 2            ; Адрес начала данных первой строки (после первых двух байт) в AX
+    push ax                           ; Помещаем адрес str в стек
 
-    ; Вызов функции strpbrk
-    call strpbrk
+    call strpbrk                      ; Вызов функции strpbrk
 
-    ; Очистка стека после вызова функции
-    add sp, 4
+    add sp, 4                         ; Очищаем стек после вызова функции (удаляем аргументы)
 
-    ; Проверка возвращенного значения
-    cmp ax, 0
-    je output_null
+    cmp ax, 0                         ; Проверяем возвращаемое значение (AX)
+    je output_null                    ; Если AX = 0 (NULL), переходим на метку output_null
 
     ; Вычисление позиции найденного символа
-    lea bx, str_input1 + 2
-    sub ax, bx  ; AX = смещение найденного символа
-    inc ax      ; Позиция начинается с 1
-    mov bx, ax  ; Сохранение позиции в BX
+    lea bx, str_input1 + 2            ; Адрес начала данных первой строки в BX
+    sub ax, bx                        ; AX = адрес найденного символа - адрес начала строки
+    inc ax                            ; Увеличиваем AX на 1 для получения позиции (нумерация с 1)
+    mov bx, ax                        ; Сохраняем позицию в BX для вывода
 
     ; Вывод 'Position: '
-    mov ah, 9
-    lea dx, msg_pos
-    int 21h
+    mov ah, 09h                       ; Функция DOS 09h: вывод строки
+    lea dx, msg_pos                   ; Адрес сообщения 'Position: ' в DX
+    int 21h                           ; Вызов прерывания DOS
 
-    ; Вывод позиции
-    call print_number
+    call print_number                 ; Вызов процедуры вывода числа в BX
 
-    ; Переход к завершению программы
-    jmp exit_program
+    ; Переход на новую строку после вывода позиции
+    mov ah, 09h                       ; Функция DOS 09h: вывод строки
+    lea dx, newline                   ; Адрес переноса строки в DX
+    int 21h                           ; Вызов прерывания DOS
+
+    jmp exit_program                  ; Переход к завершению программы
 
 output_null:
-    ; Вывод 'null'
-    mov ah, 9
-    lea dx, msg_null
-    int 21h
+    ; Вывод 'null' если символ не найден
+    mov ah, 09h                       ; Функция DOS 09h: вывод строки
+    lea dx, msg_null                  ; Адрес сообщения 'null' в DX
+    int 21h                           ; Вызов прерывания DOS
+
+    ; Переход на новую строку после вывода 'null'
+    mov ah, 09h                       ; Функция DOS 09h: вывод строки
+    lea dx, newline                   ; Адрес переноса строки в DX
+    int 21h                           ; Вызов прерывания DOS
 
 exit_program:
-    ; Завершение программы
-    mov ah, 4Ch
-    int 21h
+    mov ah, 4Ch                       ; Функция DOS 4Ch: завершение программы
+    int 21h                           ; Вызов прерывания DOS
 
-; Подпрограмма для вывода числа в BX
+; Процедура для вывода числа в BX
 print_number proc
-    push ax
+    push ax                           ; Сохраняем регистры на стеке
     push bx
     push cx
     push dx
     push si
 
-    mov si, offset num_buf + 5  ; Указатель на конец буфера
-    mov byte ptr [si], '$'      ; Добавление символа конца строки
-    dec si
+    mov si, offset num_buf + 5        ; Устанавливаем SI на конец буфера num_buf
+    mov byte ptr [si], '$'            ; Добавляем признак конца строки '$'
+    dec si                            ; Переходим на предыдущий символ
 
-    mov cx, 0  ; Счетчик цифр
+    mov cx, 0                         ; Инициализируем счетчик цифр
 
 convert_loop:
-    xor dx, dx
-    mov ax, bx
-    div word ptr [ten]  ; Деление на 10
-    add dl, '0'         ; Преобразование остатка в ASCII
-    mov [si], dl
-    dec si
-    inc cx
-    mov bx, ax
-    cmp bx, 0
-    jne convert_loop
+    xor dx, dx                        ; Обнуляем DX для деления (DX:AX)
+    mov ax, bx                        ; Переносим число из BX в AX
+    div word ptr [ten]                ; Делим AX на 10, частное в AX, остаток в DX
+    add dl, '0'                       ; Преобразуем остаток в ASCII-код цифры
+    mov [si], dl                      ; Сохраняем цифру в буфер
+    dec si                            ; Переходим к следующей позиции в буфере
+    inc cx                            ; Увеличиваем счетчик цифр
+    mov bx, ax                        ; Обновляем BX для следующей итерации
+    cmp bx, 0                         ; Проверяем, не закончилось ли число
+    jne convert_loop                  ; Если нет, продолжаем цикл
 
-    inc si  ; Указатель на первый символ числа
+    inc si                            ; Корректируем SI на первый символ числа
 
-    ; Вывод числа
-    mov ah, 9
-    mov dx, si
-    int 21h
+    ; Выводим число
+    mov ah, 09h                       ; Функция DOS 09h: вывод строки
+    mov dx, si                        ; Адрес числа в DX
+    int 21h                           ; Вызов прерывания DOS
 
-    pop si
+    pop si                            ; Восстанавливаем регистры из стека
     pop dx
     pop cx
     pop bx
     pop ax
-    ret
+    ret                               ; Возврат из процедуры
 print_number endp
 
 ; Реализация функции strpbrk
 strpbrk proc
-    push bp
-    mov bp, sp
-    push si
+    push bp                           ; Сохраняем базовый указатель
+    mov bp, sp                        ; Устанавливаем BP на текущий SP
+    push si                           ; Сохраняем регистры на стеке
     push di
     push bx
     push cx
     push dx
 
-    mov si, [bp+4]  ; SI = указатель на str
-    mov di, [bp+6]  ; DI = указатель на sym
+    mov si, [bp+4]                    ; Получаем адрес str из стека в SI
+    mov di, [bp+6]                    ; Получаем адрес sym из стека в DI
 
-    ; Получение длин строк
-    mov cl, [si - 1]  ; Длина str
-    mov ch, 0
-    mov bx, cx        ; BX = длина str
-    mov dl, [di - 1]  ; Длина sym
-    mov dh, 0
+    mov cl, [si - 1]                  ; Получаем длину str из буфера (второй байт перед строкой)
+    mov ch, 0                         ; Обнуляем старший байт CX
+    mov bx, cx                        ; Сохраняем длину str в BX
+    mov dl, [di - 1]                  ; Получаем длину sym из буфера
+    mov dh, 0                         ; Обнуляем старший байт DX
 
-    ; Внешний цикл по str
 str_loop:
-    cmp bx, 0
-    je not_found
+    cmp bx, 0                         ; Проверяем, не конец ли строки str
+    je not_found                      ; Если да, символ не найден
 
-    mov al, [si]  ; Текущий символ из str
+    mov al, [si]                      ; Загружаем текущий символ из str в AL
 
-    ; Внутренний цикл по sym
-    push si
+    push si                           ; Сохраняем SI и BX перед внутренним циклом
     push bx
 
-    mov cx, dx    ; CX = длина sym
-    mov di, [bp+6]
+    mov cx, dx                        ; Загружаем длину sym в CX
+    mov di, [bp+6]                    ; Сбрасываем DI на начало sym
 
 sym_loop:
-    cmp cx, 0
-    je next_char
-    mov ah, [di]
-    cmp al, ah
-    je found_char
-    inc di
-    dec cx
-    jmp sym_loop
+    cmp cx, 0                         ; Проверяем, не конец ли строки sym
+    je next_char                      ; Если да, переходим к следующему символу str
+    mov ah, [di]                      ; Загружаем текущий символ из sym в AH
+    cmp al, ah                        ; Сравниваем символы из str и sym
+    je found_char                     ; Если совпадают, символ найден
+    inc di                            ; Переходим к следующему символу sym
+    dec cx                            ; Уменьшаем счетчик CX
+    jmp sym_loop                      ; Повторяем цикл sym_loop
 
 next_char:
-    ; Символ не найден, переходим к следующему
-    pop bx
+    pop bx                            ; Восстанавливаем BX и SI после внутреннего цикла
     pop si
-    inc si
-    dec bx
-    jmp str_loop
+    inc si                            ; Переходим к следующему символу str
+    dec bx                            ; Уменьшаем счетчик BX
+    jmp str_loop                      ; Повторяем цикл str_loop
 
 found_char:
-    ; Символ найден
-    pop bx
+    pop bx                            ; Восстанавливаем BX и SI после внутреннего цикла
     pop si
-    mov ax, si    ; Возвращаем адрес найденного символа
-    jmp strpbrk_end
+    mov ax, si                        ; Записываем адрес найденного символа в AX
+    jmp strpbrk_end                   ; Переходим к завершению функции
 
 not_found:
-    mov ax, 0     ; Возвращаем NULL
+    mov ax, 0                         ; Если символ не найден, возвращаем NULL (0)
 
 strpbrk_end:
-    pop dx
+    pop dx                            ; Восстанавливаем регистры из стека
     pop cx
     pop bx
     pop di
     pop si
-    pop bp
-    ret 4
+    pop bp                            ; Восстанавливаем базовый указатель
+    ret 4                             ; Возврат из функции и очистка стека (2 аргумента по 2 байта)
 strpbrk endp
 
 code ends
-end start
+end start                             ; Конец программы, точка входа - метка start
