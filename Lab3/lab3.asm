@@ -12,9 +12,7 @@ data segment
     msg_pos db 'Position: $', 0
     num_buf db 5 dup(0), '$', 0  ; Буфер для хранения позиции в виде строки
 
-    ; Промпты для ввода
-    prompt1 db 'Введите первую строку:$'
-    prompt2 db 'Введите вторую строку:$'
+    ; Перенос строки
     newline db 13, 10, '$'
 data ends
 
@@ -23,9 +21,9 @@ start:
     mov ax, data
     mov ds, ax
 
-    ; Вывод промпта для первой строки
+    ; Вывод новой строки перед первым вводом
     mov ah, 09h
-    lea dx, prompt1
+    lea dx, newline
     int 21h
 
     ; Ввод первой строки
@@ -33,14 +31,9 @@ start:
     mov ah, 0Ah
     int 21h
 
-    ; Вывод новой строки
+    ; Вывод новой строки после первого ввода
     mov ah, 09h
     lea dx, newline
-    int 21h
-
-    ; Вывод промпта для второй строки
-    mov ah, 09h
-    lea dx, prompt2
     int 21h
 
     ; Ввод второй строки
@@ -48,7 +41,7 @@ start:
     mov ah, 0Ah
     int 21h
 
-    ; Вывод новой строки
+    ; Вывод новой строки после второго ввода
     mov ah, 09h
     lea dx, newline
     int 21h
@@ -222,4 +215,3 @@ strpbrk endp
 
 code ends
 end start
-
