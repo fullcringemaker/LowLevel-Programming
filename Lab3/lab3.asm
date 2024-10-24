@@ -2,10 +2,9 @@ assume CS:code, DS:data
 
 data segment
     ; Буферы для ввода строк
-    str_input1 db 255, 0, 255 dup(0) ; Первый байт - максимальная длина (255)
-    buffer_gap db 10 dup(0)          ; Промежуток между буферами
-    str_input2 db 255, 0, 255 dup(0)
-
+    buf_size equ 256
+    str_input1 db buf_size dup(0)
+    str_input2 db buf_size dup(0)
     ten dw 10
 
     ; Сообщения для вывода
@@ -19,32 +18,32 @@ start:
     mov ax, data
     mov ds, ax
 
-    ; Ввод первой строки
+    ; Подготовка буфера для первой строки
+    mov byte ptr [str_input1], buf_size - 2 ; Максимальная длина ввода
     lea dx, str_input1
     mov ah, 0Ah
     int 21h
 
     ; Добавление символа конца строки '$' в первую строку
-    mov si, offset str_input1 + 2
+    lea si, [str_input1 + 2]
     mov cl, [str_input1 + 1]    ; Фактическая длина введенной строки
-    add si, cx
-    mov byte ptr [si], '$'
+    mov [si + cx], '$'          ; Добавляем '$' в конец строки
 
-    ; Ввод второй строки
+    ; Подготовка буфера для второй строки
+    mov byte ptr [str_input2], buf_size - 2 ; Максимальная длина ввода
     lea dx, str_input2
     mov ah, 0Ah
     int 21h
 
     ; Добавление символа конца строки '$' во вторую строку
-    mov si, offset str_input2 + 2
+    lea si, [str_input2 + 2]
     mov cl, [str_input2 + 1]
-    add si, cx
-    mov byte ptr [si], '$'
+    mov [si + cx], '$'
 
     ; Подготовка аргументов для функции strpbrk
-    lea ax, str_input2 + 2      ; Адрес начала второй строки
+    lea ax, [str_input2 + 2]    ; Адрес начала второй строки
     push ax
-    lea ax, str_input1 + 2      ; Адрес начала первой строки
+    lea ax, [str_input1 + 2]    ; Адрес начала первой строки
     push ax
 
     ; Вызов функции strpbrk
@@ -58,7 +57,7 @@ start:
     je output_null
 
     ; Вычисление позиции найденного символа
-    lea bx, str_input1 + 2
+    lea bx, [str_input1 + 2]
     sub ax, bx  ; AX = смещение найденного символа
     inc ax      ; Позиция начинается с 1
     mov bx, ax  ; Сохранение позиции в BX
@@ -139,37 +138,53 @@ strpbrk proc
     mov si, [bp+4]  ; SI = указатель на str
     mov di, [bp+6]  ; DI = указатель на sym
 
-    ; Внешний цикл по str
-str_loop:
-    lodsb          ; AL = текущий символ из str, SI увеличивается
-    cmp al, '$'
-    je not_found   ; Дошли до конца строки
+    ; Получение фактической длины строк
+    mov cl, [si - 2]   ; Длина str
+    mov ch, 0
+    mov bx, cx         ; BX = длина str
 
-    push si        ; Сохраняем SI
+    mov dl, [di - 2]   ; Длина sym
+    mov dh, 0
+    mov dx, dx         ; DX = длина sym
+
+    ; Внешний цикл по str
+    xor ax, ax         ; AX будет использоваться для сравнения
+str_loop:
+    cmp bx, 0
+    je not_found
+
+    mov al, [si]
+    push si
+    push bx
 
     ; Внутренний цикл по sym
-    mov di, [bp+6] ; Восстанавливаем DI
+    mov cx, dx         ; CX = длина sym
+    mov di, [bp+6]     ; DI = указатель на sym
 sym_loop:
-    mov bl, [di]
-    cmp bl, '$'
-    je end_sym_loop
-    cmp al, bl
+    cmp cx, 0
+    je sym_end
+    mov ah, [di]
+    cmp al, ah
     je found_char
     inc di
+    dec cx
     jmp sym_loop
 
-end_sym_loop:
-    pop si         ; Восстанавливаем SI
+sym_end:
+    pop bx
+    pop si
+    inc si
+    dec bx
     jmp str_loop
 
 found_char:
-    pop si         ; Восстанавливаем SI
-    dec si         ; Корректируем SI после LODSB
-    mov ax, si     ; Возвращаем адрес найденного символа
+    pop bx
+    pop si
+    mov ax, si         ; Возвращаем адрес найденного символа
     jmp strpbrk_end
 
 not_found:
-    mov ax, 0      ; Возвращаем NULL
+    mov ax, 0          ; Возвращаем NULL
 
 strpbrk_end:
     pop dx
