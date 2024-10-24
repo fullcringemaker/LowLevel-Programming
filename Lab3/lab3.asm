@@ -8,9 +8,13 @@ data segment
     ten dw 10
 
     ; Сообщения для вывода
-    msg_null db 'null$', 0
-    msg_pos db 'Position: $', 0
-    num_buf db 5 dup(0), '$', 0  ; Буфер для хранения позиции в виде строки
+    msg_enter_str1 db 'Enter first string:$'
+    msg_enter_str2 db 'Enter second string:$'
+    msg_null db 'null$'
+    msg_pos db 'Position: $'
+    num_buf db 5 dup(0), '$'
+
+    crlf db 13, 10, '$'  ; Перенос строки
 data ends
 
 code segment
@@ -18,14 +22,44 @@ start:
     mov ax, data
     mov ds, ax
 
+    ; Вывод сообщения перед вводом первой строки
+    mov ah, 09h
+    lea dx, msg_enter_str1
+    int 21h
+
+    ; Перенос строки
+    mov ah, 09h
+    lea dx, crlf
+    int 21h
+
     ; Ввод первой строки
     lea dx, str_input1
     mov ah, 0Ah
     int 21h
 
+    ; Перенос строки после ввода
+    mov ah, 09h
+    lea dx, crlf
+    int 21h
+
+    ; Вывод сообщения перед вводом второй строки
+    mov ah, 09h
+    lea dx, msg_enter_str2
+    int 21h
+
+    ; Перенос строки
+    mov ah, 09h
+    lea dx, crlf
+    int 21h
+
     ; Ввод второй строки
     lea dx, str_input2
     mov ah, 0Ah
+    int 21h
+
+    ; Перенос строки после ввода
+    mov ah, 09h
+    lea dx, crlf
     int 21h
 
     ; Подготовка аргументов для функции strpbrk
@@ -40,6 +74,11 @@ start:
     ; Очистка стека после вызова функции
     add sp, 4
 
+    ; Перенос строки перед выводом результата
+    mov ah, 09h
+    lea dx, crlf
+    int 21h
+
     ; Проверка возвращенного значения
     cmp ax, 0
     je output_null
@@ -51,7 +90,7 @@ start:
     mov bx, ax  ; Сохранение позиции в BX
 
     ; Вывод 'Position: '
-    mov ah, 9
+    mov ah, 09h
     lea dx, msg_pos
     int 21h
 
@@ -63,7 +102,7 @@ start:
 
 output_null:
     ; Вывод 'null'
-    mov ah, 9
+    mov ah, 09h
     lea dx, msg_null
     int 21h
 
@@ -101,7 +140,7 @@ convert_loop:
     inc si  ; Указатель на первый символ числа
 
     ; Вывод числа
-    mov ah, 9
+    mov ah, 09h
     mov dx, si
     int 21h
 
@@ -127,10 +166,10 @@ strpbrk proc
     mov di, [bp+6]  ; DI = указатель на sym
 
     ; Получение длин строк
-    mov cl, [si - 1]  ; Длина str
+    mov cl, [si - 2]  ; Длина str
     mov ch, 0
     mov bx, cx        ; BX = длина str
-    mov dl, [di - 1]  ; Длина sym
+    mov dl, [di - 2]  ; Длина sym
     mov dh, 0
 
     ; Внешний цикл по str
@@ -187,4 +226,3 @@ strpbrk endp
 
 code ends
 end start
-
