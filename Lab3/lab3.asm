@@ -8,13 +8,13 @@ data segment
     ten dw 10
 
     ; Сообщения для вывода
-    msg_enter_str1 db 'Enter first string:$'
-    msg_enter_str2 db 'Enter second string:$'
+    msg_prompt1 db 'Enter first string:$'
+    msg_prompt2 db 'Enter second string:$'
     msg_null db 'null$'
     msg_pos db 'Position: $'
     num_buf db 5 dup(0), '$'
 
-    crlf db 13, 10, '$'  ; Перенос строки
+    newline db 0Dh, 0Ah, '$'
 data ends
 
 code segment
@@ -22,14 +22,9 @@ start:
     mov ax, data
     mov ds, ax
 
-    ; Вывод сообщения перед вводом первой строки
-    mov ah, 09h
-    lea dx, msg_enter_str1
-    int 21h
-
-    ; Перенос строки
-    mov ah, 09h
-    lea dx, crlf
+    ; Вывод приглашения для ввода первой строки
+    mov ah, 9
+    lea dx, msg_prompt1
     int 21h
 
     ; Ввод первой строки
@@ -37,19 +32,14 @@ start:
     mov ah, 0Ah
     int 21h
 
-    ; Перенос строки после ввода
-    mov ah, 09h
-    lea dx, crlf
+    ; Вывод новой строки
+    mov ah, 9
+    lea dx, newline
     int 21h
 
-    ; Вывод сообщения перед вводом второй строки
-    mov ah, 09h
-    lea dx, msg_enter_str2
-    int 21h
-
-    ; Перенос строки
-    mov ah, 09h
-    lea dx, crlf
+    ; Вывод приглашения для ввода второй строки
+    mov ah, 9
+    lea dx, msg_prompt2
     int 21h
 
     ; Ввод второй строки
@@ -57,9 +47,9 @@ start:
     mov ah, 0Ah
     int 21h
 
-    ; Перенос строки после ввода
-    mov ah, 09h
-    lea dx, crlf
+    ; Вывод новой строки
+    mov ah, 9
+    lea dx, newline
     int 21h
 
     ; Подготовка аргументов для функции strpbrk
@@ -74,9 +64,9 @@ start:
     ; Очистка стека после вызова функции
     add sp, 4
 
-    ; Перенос строки перед выводом результата
-    mov ah, 09h
-    lea dx, crlf
+    ; Вывод новой строки перед результатом
+    mov ah, 9
+    lea dx, newline
     int 21h
 
     ; Проверка возвращенного значения
@@ -90,7 +80,7 @@ start:
     mov bx, ax  ; Сохранение позиции в BX
 
     ; Вывод 'Position: '
-    mov ah, 09h
+    mov ah, 9
     lea dx, msg_pos
     int 21h
 
@@ -102,7 +92,7 @@ start:
 
 output_null:
     ; Вывод 'null'
-    mov ah, 09h
+    mov ah, 9
     lea dx, msg_null
     int 21h
 
@@ -140,7 +130,7 @@ convert_loop:
     inc si  ; Указатель на первый символ числа
 
     ; Вывод числа
-    mov ah, 09h
+    mov ah, 9
     mov dx, si
     int 21h
 
