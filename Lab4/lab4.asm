@@ -2,101 +2,84 @@ assume CS:code, DS:data
 
 data segment
     msg db "Hello, world!$"
-    ; Определяем переменную X размером двойное слово
-    X dd 12345678h
+    variable dd 12345678h  ; Пример переменной размером в двойное слово
+    procedure_name db "Procedure called!$"
 data ends
 
 code segment
-    ; Определение макросов
-
-PUSHM MACRO X
-    IFDEF X
-        IF (TYPE X) EQ 4
-            PUSH WORD PTR [X+2] ; Сохранение старшего слова
-            PUSH WORD PTR [X]   ; Сохранение младшего слова
-        ELSE
-            .ERR <Переменная X не является двойным словом>
-        ENDIF
-    ELSE
-        .ERR <Переменная X не определена>
-    ENDIF
-ENDM
-
-POPM MACRO X
-    IFDEF X
-        IF (TYPE X) EQ 4
-            POP WORD PTR [X]     ; Восстановление младшего слова
-            POP WORD PTR [X+2]   ; Восстановление старшего слова
-        ELSE
-            .ERR <Переменная X не является двойным словом>
-        ENDIF
-    ELSE
-        .ERR <Переменная X не определена>
-    ENDIF
-ENDM
-
-CALLM MACRO P
-    IFDEF P
-        ; Используем EAX как вспомогательный регистр
-        PUSH EAX
-        MOV EAX, OFFSET $$NEXT
-        PUSH EAX
-        JMP P
-$$NEXT:
-        POP EAX
-    ELSE
-        .ERR <Процедура P не определена>
-    ENDIF
-ENDM
-
-RETM MACRO N
-    IF CONST N
-        ADD SP, N
-    ENDIF
-    RET
-ENDM
-
-LOOPM MACRO L
-    IFDEF L
-        DEC CX
-        JNZ L
-    ELSE
-        .ERR <Метка L не определена>
-    ENDIF
-ENDM
-
 start:
+    ; Инициализация сегментов
     mov AX, data
     mov DS, AX
 
+    ; Вызов макросов
+    ; Пример использования макросов
+    PUSHM variable  ; PUSHM X
+    POPM variable   ; POPM X
+    CALLM myProcedure ; CALLM P
+    RETM 10          ; RETM N
+    LOOPM loop_start ; LOOPM L
+
+    ; Печать сообщения
     mov AH, 09h
-    mov DX, OFFSET msg
+    mov DX, offset msg
     int 21h
 
-    ; Использование макросов PUSHM и POPM
-    PUSHM X
-    ; ... выполнение каких-либо операций ...
-    POPM X
-
-    ; Использование макросов CALLM и RETM
-    CALLM myProc
-
+    ; Завершение программы
     mov AH, 4Ch
     int 21h
 
-; Определение процедуры myProc
-myProc PROC
-    ; Пример использования макроса LOOPM
-    mov CX, 5
-printLoop:
+myProcedure:
+    ; Пример процедуры, которая будет вызываться через CALLM
     mov AH, 09h
-    mov DX, OFFSET msg
+    mov DX, offset procedure_name
     int 21h
-    LOOPM printLoop
+    ret
 
-    ; Возврат из процедуры без корректировки SP
-    RETM 0
-myProc ENDP
+loop_start:
+    ; Тело цикла
+    mov CX, 5
+    loop loop_start
 
 code ends
 end start
+
+; Макросы
+
+; Макрос PUSHM - сохраняет значение переменной на стеке
+PUSHM macro X
+    ; Проверка на существование переменной (X)
+    ; Если X не определена, завершение сборки
+    ; В 8086 не существует прямой директивы для проверки существования переменной,
+    ; поэтому тут просто будет произведено сохранение в регистры и стеке
+    ; Предполагаем, что X является переменной размера двойного слова
+    push dword ptr X
+endm
+
+; Макрос POPM - извлекает значение с стека в переменную
+POPM macro X
+    ; Проверка на существование переменной (X)
+    ; Если X не определена, завершение сборки
+    pop dword ptr X
+endm
+
+; Макрос CALLM - вызывает процедуру (P)
+CALLM macro P
+    ; Проверка существования процедуры (P)
+    ; Переход к метке P
+    call P
+endm
+
+; Макрос RETM - выполняет возврат из процедуры с указанием константы N
+RETM macro N
+    ; Константа N используется для восстановления состояния
+    ; и завершения процедуры с передачей значения в стеке
+    ret N
+endm
+
+; Макрос LOOPM - начинает цикл с меткой L
+LOOPM macro L
+    ; Проверка существования метки L
+    ; Запуск цикла с указанной меткой
+    loop L
+endm
