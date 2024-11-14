@@ -2,83 +2,101 @@ assume CS:code, DS:data
 
 data segment
     msg db "Hello, world!$"
-    var dd 0       ; Переменная типа двойное слово (4 байта)
-    data ends
+    ; Определяем переменную X размером двойное слово
+    X dd 12345678h
+data ends
 
 code segment
+    ; Определение макросов
+
+PUSHM MACRO X
+    IFDEF X
+        IF (TYPE X) EQ 4
+            PUSH WORD PTR [X+2] ; Сохранение старшего слова
+            PUSH WORD PTR [X]   ; Сохранение младшего слова
+        ELSE
+            .ERR <Переменная X не является двойным словом>
+        ENDIF
+    ELSE
+        .ERR <Переменная X не определена>
+    ENDIF
+ENDM
+
+POPM MACRO X
+    IFDEF X
+        IF (TYPE X) EQ 4
+            POP WORD PTR [X]     ; Восстановление младшего слова
+            POP WORD PTR [X+2]   ; Восстановление старшего слова
+        ELSE
+            .ERR <Переменная X не является двойным словом>
+        ENDIF
+    ELSE
+        .ERR <Переменная X не определена>
+    ENDIF
+ENDM
+
+CALLM MACRO P
+    IFDEF P
+        ; Используем EAX как вспомогательный регистр
+        PUSH EAX
+        MOV EAX, OFFSET $$NEXT
+        PUSH EAX
+        JMP P
+$$NEXT:
+        POP EAX
+    ELSE
+        .ERR <Процедура P не определена>
+    ENDIF
+ENDM
+
+RETM MACRO N
+    IF CONST N
+        ADD SP, N
+    ENDIF
+    RET
+ENDM
+
+LOOPM MACRO L
+    IFDEF L
+        DEC CX
+        JNZ L
+    ELSE
+        .ERR <Метка L не определена>
+    ENDIF
+ENDM
+
 start:
     mov AX, data
     mov DS, AX
 
-    ; Вывод сообщения
     mov AH, 09h
-    mov DX, offset msg
+    mov DX, OFFSET msg
     int 21h
 
-    ; Пример использования макроса PUSHM
-    mov EAX, 12345678h  ; Поместим значение в EAX для теста
-    PUSHM var           ; Используем макрос для записи в переменную типа двойное слово
+    ; Использование макросов PUSHM и POPM
+    PUSHM X
+    ; ... выполнение каких-либо операций ...
+    POPM X
 
-    ; Пример использования макроса POPM
-    POPM var            ; Используем макрос для чтения значения из переменной
+    ; Использование макросов CALLM и RETM
+    CALLM myProc
 
-    ; Пример использования макроса CALLM
-    CALLM MyProc        ; Вызов процедуры с помощью макроса
-
-    ; Пример использования макроса RETM
-    RETM 0              ; Возврат из процедуры с аргументом 0
-
-    ; Пример использования макроса LOOPM
-    LOOPM LoopLabel     ; Цикл с использованием макроса
-
-    ; Завершение программы
     mov AH, 4Ch
     int 21h
 
-; Макросы
-PUSHM MACRO X
-    ; Проверяем существование переменной X
-    ; (на уровне компилятора, можно добавлять свои проверки на этапе компиляции)
-    ; Сохраняем значение переменной X в памяти
-    mov EAX, X         ; Загружаем значение переменной X в регистр EAX
-    push EAX           ; Сохраняем значение EAX на стеке
-ENDM
+; Определение процедуры myProc
+myProc PROC
+    ; Пример использования макроса LOOPM
+    mov CX, 5
+printLoop:
+    mov AH, 09h
+    mov DX, OFFSET msg
+    int 21h
+    LOOPM printLoop
 
-POPM MACRO X
-    ; Проверяем существование переменной X
-    ; Восстанавливаем значение из стека в переменную X
-    pop EAX            ; Извлекаем значение из стека в регистр EAX
-    mov X, EAX         ; Сохраняем его в переменную X
-ENDM
+    ; Возврат из процедуры без корректировки SP
+    RETM 0
+myProc ENDP
 
-CALLM MACRO P
-    ; Проверяем существование процедуры P
-    ; Переход к процедуре P
-    call P             ; Вызываем процедуру по имени P
-ENDM
-
-RETM MACRO N
-    ; Проверяем существование константы N
-    ; Возврат из процедуры с указанием количества байт для очистки стека
-    ret N              ; Возвращаем из процедуры с очисткой N байт
-ENDM
-
-LOOPM MACRO L
-    ; Проверяем существование метки L
-    ; Организуем цикл
-    loop L             ; Выполняем цикл до достижения метки L
-ENDM
-
-; Процедура для примера использования CALLM
-MyProc PROC
-    ; Простая процедура для теста
-    mov AX, 1
-    ret
-MyProc ENDP
-
-LoopLabel:
-    ; Место назначения для цикла
-    mov CX, 10         ; Пример количества итераций
-    loop LoopLabel     ; Цикл по метке
 code ends
 end start
