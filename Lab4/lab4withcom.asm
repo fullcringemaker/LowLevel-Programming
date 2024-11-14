@@ -50,14 +50,18 @@ end start
 ; Реализация макросов
 PUSHM macro X
     ; Сохраняем значение переменной X на стеке
-    mov eax, dword ptr X
-    push eax
+    mov ax, word ptr X
+    push ax
+    mov ax, word ptr X+2
+    push ax
 endm
 
 POPM macro X
     ; Извлекаем значение с вершины стека в переменную X
-    pop eax
-    mov dword ptr X, eax
+    pop ax
+    mov word ptr X, ax
+    pop ax
+    mov word ptr X+2, ax
 endm
 
 CALLM macro P
