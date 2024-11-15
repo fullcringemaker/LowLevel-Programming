@@ -11,11 +11,11 @@ POPM macro X
 endm
 
 CALLM macro P
-    push AX              ; Сохраняем AX
+    push AX              
     push offset after_callm@
     jmp P
     after_callm@:
-    pop AX               ; Восстанавливаем AX
+    pop AX               
 endm
 
 RETM macro N
@@ -25,10 +25,10 @@ RETM macro N
 endm
 
 LOOPM macro L
-    push CX              ; Сохраняем CX
+    push CX              
     dec CX
     jnz L
-    pop CX               ; Восстанавливаем CX
+    pop CX               
 endm
 
 data segment
