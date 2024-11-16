@@ -11,14 +11,15 @@ POPM macro X
 endm
 
 CALLM macro P
-    push offset after_callm@
+    LOCAL after_callm
+    push offset after_callm
     jmp P
-    after_callm@:
+    after_callm:
 endm
 
 RETM macro N
-    add SP, N
     pop AX
+    add SP, N
     jmp AX
 endm
 
@@ -31,7 +32,7 @@ data segment
     msg    db "Hello, world!$"
     var    dw 5678h
            dw 1234h
-    count  dw 5
+    count  dw 3
 data ends
 
 code segment
@@ -50,7 +51,9 @@ start:
 
     POPM var
 
-    CALLM my_procedure
+    CALLM my_procedure1
+    CALLM my_procedure2
+    CALLM my_procedure1
 
     mov CX, count
 
@@ -64,9 +67,15 @@ loop_start:
     mov AH, 4Ch
     int 21h
 
-my_procedure:
+my_procedure1:
     mov AH, 02h
     mov DL, 'P'
+    int 21h
+    RETM 0
+
+my_procedure2:
+    mov AH, 02h
+    mov DL, 'Q'
     int 21h
     RETM 0
 code ends
