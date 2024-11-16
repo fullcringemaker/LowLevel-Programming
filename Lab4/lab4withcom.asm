@@ -52,7 +52,7 @@ start:
     POPM var
 
     CALLM my_procedure1
-    CALLM my_procedure2
+    CALLM my_procedure1
     CALLM my_procedure1
 
     mov CX, count
