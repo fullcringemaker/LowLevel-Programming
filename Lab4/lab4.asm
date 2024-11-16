@@ -11,24 +11,21 @@ POPM macro X
 endm
 
 CALLM macro P
-    push AX              
-    push offset after_callm@
+    LOCAL after_callm
+    push offset after_callm
     jmp P
-    after_callm@:
-    pop AX               
+    after_callm:
 endm
 
 RETM macro N
-    add SP, N
     pop AX
+    add SP, N
     jmp AX
 endm
 
 LOOPM macro L
-    push CX              
     dec CX
     jnz L
-    pop CX               
 endm
 
 data segment
