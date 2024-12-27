@@ -1,15 +1,11 @@
 ;------------------------------------------------------------------------------
 ;  Сборка (TASM):
-;    TASM /m PM.asm
-;    TLINK /x /3 PM.obj
-;    PM.exe
+;    TASM /m lab6.asm
+;    TLINK /x /3 lab6.obj
+;    lab6.exe
 ;------------------------------------------------------------------------------
 
         .386p                ; Разрешить команды 386 и привилегированные инструкции
-
-;------------------------------------------------------------------------------
-; СЕГМЕНТ КОДА (для реального режима)
-;------------------------------------------------------------------------------
 
 InitSegment segment para public 'CODE' use16
         assume CS:InitSegment, SS:InitStackSegment
@@ -18,52 +14,32 @@ RealInitEntry:
                 mov     AX, 03h
                 int     10h            ; текстовый режим 80x25 + очистка экрана
                
-; Открываем линию А20 (для 32-битной адресации):
+; Открывание линии А20 (для 32-битной адресации):
                 in      AL,92h
                 or      AL,2
                 out     92h,AL
-
-; Вычисляем линейный адрес метки BeginProtectedMode (точка входа в PMode):
                 xor     EAX, EAX
                 mov     AX, MainPMSegment
                 shl     EAX, 4
                 add     EAX, offset BeginProtectedMode
                 mov     dword ptr NewEntryOffset, EAX
-
-; Теперь вычислим линейный адрес таблицы GDT (для GDTR):
                 xor     EAX, EAX
                 mov     AX, InitSegment
                 shl     EAX, 4
                 add     AX, offset GlobalDescTable
-
                 mov     dword ptr GDTRRecord+2, EAX
-
-; Загружаем регистр GDTR:
                 lgdt    fword ptr GDTRRecord
-
-; Запрет маскируемых прерываний:
                 cli
-
-; Запрет немаскируемых прерываний:
                 in      AL, 70h
                 or      AL, 80h
                 out     70h, AL
-
-; Переключение в защищенный режим:
                 mov     EAX, CR0
                 or      AL, 1
                 mov     CR0, EAX
-
-; Делаем JMP FAR на новый селектор кода:
-                db      66h            ; префикс 32-битной адресации
-                db      0EAh           ; опкод JMP FAR
-NewEntryOffset  dd      ?              ; 32-битный смещение (запишется выше)
-                dw      00001000b      ; селектор (CodeDescriptor)
-
-
-;------------------------------------------------------------------------------
-; ГЛОБАЛЬНАЯ ТАБЛИЦА ДЕСКРИПТОРОВ (GDT)
-;------------------------------------------------------------------------------
+                db      66h            
+                db      0EAh           
+NewEntryOffset  dd      ?             
+                dw      00001000b      
 
 GlobalDescTable:
 
@@ -93,36 +69,19 @@ Desc_0E         db 0FFh,0FFh,0Eh,00h,00h,10011101b,11001111b,00h
 Desc_0F         db 0FFh,0FFh,0Fh,00h,00h,10011110b,11001111b,00h
 Desc_10         db 0FFh,0FFh,10h,00h,00h,10011111b,11001111b,00h
 
-; Размер GDT:
 GDTTableSize    equ  ($ - GlobalDescTable)
 
 GDTRRecord      dw   GDTTableSize - 1
                 dd   ?
 
 InitSegment ends
-;------------------------------------------------------------------------------
-
-
-;------------------------------------------------------------------------------
-; СЕГМЕНТ СТЕКА (для реального режима)
-;------------------------------------------------------------------------------
 
 InitStackSegment segment para stack 'STACK' use16
                 db  100h dup(?)
 InitStackSegment ends
 
-;------------------------------------------------------------------------------
-
-
-;------------------------------------------------------------------------------
-; СЕГМЕНТ КОДА (для защищенного режима)
-;------------------------------------------------------------------------------
-
 MainPMSegment segment para public 'CODE' use32
         assume  CS:MainPMSegment, DS:MainPMData
-
-; Здесь — процедуры, переименованные ранее
-; (при желании можно менять названия ещё сильнее, лишь бы все вызовы совпадали)
 
 AcquireSegmentBase proc
     mov  esi, edx
@@ -300,7 +259,7 @@ PrintDataClassification proc
     cmp  al, 2
     jge  data01
     push ax
-    mov  al, 27  ;; 'R'
+    mov  al, 27  
     call FormatInHex
     add  EDI, 2
     pop  ax
@@ -309,7 +268,7 @@ PrintDataClassification proc
 data01:
     sub  al, 2
     push ax
-    mov  al, 32  ;; 'W'
+    mov  al, 32  
     call FormatInHex
     add  EDI, 2
     pop  ax
@@ -322,7 +281,7 @@ ShowDataProperties proc
     jge  data1
     push ax
     push dx
-    mov  [edi], 24    ;; '↑' (для наглядности)
+    mov  [edi], 24    ;; '↑'
     mov  dl, ch
     add  dl, 1
     cmp  dl, 16
@@ -358,7 +317,7 @@ ShowGeneralAttr proc
     cmp  al, 1
     je   code001
     push ax
-    mov  al, 23  ;; 'N'
+    mov  al, 23 
     call FormatInHex
     add  EDI, 2
     pop  ax
@@ -366,7 +325,7 @@ ShowGeneralAttr proc
 code001:
     sub  al, 1
     push ax
-    mov  al, 10  ;; 'A'
+    mov  al, 10  
     call FormatInHex
     add  EDI, 2
     pop  ax
@@ -377,7 +336,7 @@ PrintCodeClassification proc
     cmp  al, 2
     jge  code01
     push ax
-    mov  al, 14  ;; 'E'
+    mov  al, 14  
     call FormatInHex
     add  EDI, 2
     pop  ax
@@ -386,7 +345,7 @@ PrintCodeClassification proc
 code01:
     sub  al, 2
     push ax
-    mov  al, 27  ;; 'R'
+    mov  al, 27  
     call FormatInHex
     add  EDI, 2
     pop  ax
@@ -398,7 +357,7 @@ ShowCodeProperties proc
     cmp  al, 4
     jge  code1
     push ax
-    mov  al, 23  ;; 'N'
+    mov  al, 23 
     call FormatInHex
     add  EDI, 2
     pop  ax
@@ -407,7 +366,7 @@ ShowCodeProperties proc
 code1:
     sub  al, 4
     push ax
-    mov  al, 12  ;; 'L' (или любой др. символ)
+    mov  al, 12 
     call FormatInHex
     add  EDI, 2
     pop  ax
@@ -423,7 +382,7 @@ DisplayModeInfo proc
     cmp  al, 8
     jge  isCode
     push ax
-    mov  al, 13  ;; 'D'
+    mov  al, 13  
     call FormatInHex
     add  EDI, 2
     pop  ax
@@ -432,7 +391,7 @@ DisplayModeInfo proc
 isCode:
     sub  al, 8
     push ax
-    mov  al, 12  ;; 'C'
+    mov  al, 12  
     call FormatInHex
     add  EDI, 2
     pop  ax
@@ -445,85 +404,65 @@ retHere:
     ret
 endp
 
-ParseDescriptorEntry proc  ;; EDX - адрес дескриптора, BX - оффсет
+ParseDescriptorEntry proc  
     push edx
-    
     ; BASE
     call AcquireSegmentBase
     mov  EDI, 012000h
     add  EDI, EBX
     call PresentBaseValue
-
     add  EDI, 2
     ; LIMIT
     call ComputeSegLimit
     call PresentBaseValue
-
     add  EDI, 2
     ; MODE
     call IdentifySegMode
     call DisplayModeInfo
-
     add  EDI, 2
     ; DLS
     call UnpackDLSField
     call DisplayDLSValue
-
     add  EDI, 2
     ; PRESENCE
     call CheckPresenceFlag
     call FormatInHex
-
     add  EDI, 4
     ; AVL
     call EvaluateAVLBit
     call FormatInHex
-
     add  EDI, 4
     ; GRANULARITY
     call RetrieveGranularity
     call FormatInHex
-
     pop  edx
     ret
 endp
 
-;------------------------------------------------------------------------------
 BeginProtectedMode:
 
-                mov     AX, 00010000b  ; селектор DataDescriptor
+                mov     AX, 00010000b 
                 mov     DS, AX
                 mov     ES, AX
-
-; Создаём каталог страниц:
-                mov     EDI, 00100000h ; физический адрес каталога (1 Мб)
-                mov     EAX, 00101007h ; адрес таблицы 0 = (1 Мб + 4 Кб)
+                mov     EDI, 00100000h 
+                mov     EAX, 00101007h 
                 stosd
                 mov     ECX, 1023
                 xor     EAX, EAX
                 rep     stosd
-
-; Заполняем таблицу страниц 0:
                 mov     EAX, 00000007h
                 mov     ECX, 1024
 FillPageLoop:
                 stosd
                 add     EAX, 00001000h
                 loop    FillPageLoop
-
-; Адрес каталога страниц в CR3:
                 mov     EAX, 00100000h
                 mov     CR3, EAX
-
-; Включаем страничную адресацию:
                 mov     EAX, CR0
                 or      EAX, 80000000h
                 mov     CR0, EAX
-
-; Меняем физ. адрес страницы 12000h -> 0B8000h (видеопамять)
                 mov     EAX, 000B8007h
                 mov     ES:00101000h+(012h*4), EAX
-
                 xor     EAX, EAX
                 sgdt    fword ptr GlobalTablePtr
                 mov     DI, offset GlobalTablePtr
@@ -546,7 +485,7 @@ IterateDescEntries:
                 cmp     CL, CH
                 jne     IterateDescEntries
 
-; Вывод четырёх сообщений по разным смещениям (условно «стандартный» и «нестандартный» адрес):
+; Вывод четырёх сообщений по разным смещениям 
 PrintBlock1:
                 mov     EDI, 012000h
                 mov     ESI, MainPMData
@@ -578,16 +517,9 @@ PrintBlock4:
                 add     ESI, offset descInfoD
                 mov     ECX, descInfoSize
                 rep     movsw
-
                 jmp     $   ; Вечный цикл
 
 MainPMSegment ends
-;------------------------------------------------------------------------------
-
-
-;------------------------------------------------------------------------------
-; СЕГМЕНТ ДАННЫХ (для защищённого режима)
-;------------------------------------------------------------------------------
 
 MainPMData segment para public 'DATA' use32
         assume CS:MainPMData
@@ -595,7 +527,6 @@ MainPMData segment para public 'DATA' use32
 GlobalTablePtr    dw ?
                   dd ?
 
-; Новые названия сообщений (цвет 07h):
 descInfoA:
 irpc textA, <Segment BASE Info, Next is LIMIT, Then We Check MODE.                                    >
     db '&textA&',0Ah
@@ -619,7 +550,5 @@ endm
 descInfoSize equ 80
 
 MainPMData ends
-;------------------------------------------------------------------------------
-
 
                 end     RealInitEntry
