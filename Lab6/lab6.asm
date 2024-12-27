@@ -1,897 +1,585 @@
-assume cs:code, ds:data
+ 
+; TASM:
+; TASM /m PM.asm
+; TLINK /x /3 PM.obj
+; PM.exe
+ 
+        .386p                                           ; разрешить привилегированные инструкции i386
+       
+; СЕГМЕНТ КОДА (для Real Mode)
+; ----------------------------------------------------------------------------------
+RM_CODE     segment     para public 'CODE' use16
+        assume      CS:RM_CODE,SS:RM_STACK
+@@start:
+                    mov                 AX,03h
+                    int                 10h            ; текстовый режим 80x25 + очистка экрана
+               
+; открываем линию А20 (для 32-х битной адресации):
+        in      AL,92h
+        or      AL,2
+        out     92h,AL
+ 	
+; вычисляем линейный адрес метки ENTRY_POINT (точка входа в защищенный режим):
+        xor     EAX,EAX             ; обнуляем регистра EAX
+        mov     AX,PM_CODE          ; AX = номер сегмента PM_CODE
+        shl     EAX,4               ; EAX = линейный адрес PM_CODE
+        add     EAX,offset ENTRY_POINT      ; EAX = линейный адрес ENTRY_POINT
+        mov     dword ptr ENTRY_OFF,EAX     ; сохраняем его в переменной    
+; (кстати, подобный "трюк" называется SMC или Self Modyfing Code - самомодифицирующийся код)
+ 
+; теперь надо вычислить линейный адрес GDT (для загрузки регистра GDTR):
+        xor     EAX,EAX
+        mov     AX,RM_CODE          ; AX = номер сегмента RM_CODE
+        shl     EAX,4               ; EAX = линейный адрес RM_CODE
+        add     AX,offset GDT           ; теперь EAX = линейный адрес GDT
+ 
+; линейный адрес GDT кладем в заранее подготовленную переменную:
+        mov     dword ptr GDTR+2,EAX
+; а подобный трюк назвать SMC уже нельзя, потому как по сути мы модифицируем данные <img src="styles/smiles_s/smile3.gif" class="mceSmilie" alt=":smile3:" title="Smile3    :smile3:">
+ 
+; собственно, загрузка регистра GDTR:
+        lgdt        fword ptr GDTR
+ 
+; запрет маскируемых прерываний:
+        cli
+ 
+; запрет немаскируемых прерываний:
+        in      AL,70h
+        or      AL,80h
+        out     70h,AL
+ 
+; переключение в защищенный режим:
+        mov     EAX,CR0
+        or      AL,1
+        mov     CR0,EAX
+ 
+; загрузить новый селектор в регистр CS
+        db      66h             ; префикс изменения разрядности операнда
+        db      0EAh                ; опкод команды JMP FAR
+ENTRY_OFF   dd      ?               ; 32-битное смещение
+        dw      00001000b           ; селектор первого дескриптора (CODE_descr)
+ 
+; ТАБЛИЦА ГЛОБАЛЬНЫХ ДЕСКРИПТОРОВ:
+GDT:  
+; нулевой дескриптор (обязательно должен присутствовать в GDT!):
+NULL_descr  db      8 dup(0)
+CODE_descr  db      0FFh,0FFh,00h,00h,00h,10011010b,11001111b,00h
+DATA_descr  db      0FFh,0FFh,00h,00h,00h,10010010b,11001111b,00h
+MY_descr1   db      0FFh,0FFh,01h,00h,00h,10010000b,11001111b,00h
+MY_descr2   db      0FFh,0FFh,02h,00h,00h,10010001b,11001111b,00h
+MY_descr3   db      0FFh,0FFh,03h,00h,00h,10010010b,11001111b,00h
+MY_descr4   db      0FFh,0FFh,04h,00h,00h,10010011b,11001111b,00h
+MY_descr5   db      0FFh,0FFh,05h,00h,00h,10010100b,11001111b,00h
+MY_descr6   db      0FFh,0FFh,06h,00h,00h,10010101b,11001111b,00h
+MY_descr7   db      0FFh,0FFh,07h,00h,00h,10010110b,11001111b,00h
+MY_descr8   db      0FFh,0FFh,08h,00h,00h,10010111b,11001111b,00h
+MY_descr9   db      0FFh,0FFh,09h,00h,00h,10011000b,11001111b,00h
+MY_descr10  db      0FFh,0FFh,0Ah,00h,00h,10011001b,11001111b,00h
+MY_descr11  db      0FFh,0FFh,0Bh,00h,00h,10011010b,11001111b,00h
+MY_descr12  db      0FFh,0FFh,0Ch,00h,00h,10011011b,11001111b,00h
+MY_descr13  db      0FFh,0FFh,0Dh,00h,00h,10011100b,11001111b,00h
+MY_descr14  db      0FFh,0FFh,0Eh,00h,00h,10011101b,11001111b,00h
+MY_descr15  db      0FFh,0FFh,0Fh,00h,00h,10011110b,11001111b,00h
+MY_descr16  db      0FFh,0FFh,10h,00h,00h,10011111b,11001111b,00h
 
-data segment
+GDT_size    equ         $-GDT               ; размер GDT
+ 
+GDTR        dw      GDT_size-1          ; 16-битный лимит GDT
+   dd      ?               ; здесь будет 32-битный линейный адрес GDT
 
-OrgGdtDesc  dw 0
-            dw 0
-            dw 0
+RM_CODE         ends
+; -----------------------------------------------------------------------------
+ 
+ 
+ 
+; СЕГМЕНТ СТЕКА (для Real Mode)
+; -----------------------------------------------------------------------------
+RM_STACK       segment          para stack 'STACK' use16
+            db     100h dup(?)         ; 256 байт под стек - это даже много
+RM_STACK       ends
+; -----------------------------------------------------------------------------
+ 
+ 
+ 
+; СЕГМЕНТ КОДА (для Protected Mode)
+; -----------------------------------------------------------------------------
+PM_CODE     segment     para public 'CODE' use32
+        assume      CS:PM_CODE,DS:PM_DATA
 
-OrgGdtSize  dw 0
+base proc
+    mov esi, edx
+    xor eax, eax
+    mov ah, byte ptr [esi + 7]
+    mov al, byte ptr [esi + 4]
+    rept 16
+        shl eax, 1
+    endm
+    mov ah, byte ptr [esi + 3]
+    mov al, byte ptr [esi + 2]
+    ret
+endp
 
-PdeBase     dw 0
-            dw 0
-PteBase     dw 0
-            dw 0
+dls proc
+    mov esi, edx
+    xor eax, eax
+    mov al, byte ptr [esi + 5]
+    shl al, 1
+    rept 6
+        shr al, 1
+    endm
+    ret
+endp
 
-DescLimitLow      dw ?
-DescBaseLow       dw ?
-DescBaseMid       db ?
-DescBaseHigh      db ?
-DescAccess        db ?
-DescLimitFlags    db ?
-DescType          db ?
+present proc
+    mov esi, edx
+    xor eax, eax
+    mov al, byte ptr [esi + 5]
+    rept 7
+        shr al, 1
+    endm
+    ret
+endp
 
-DescriptorBase32  dw 2 dup(?)
-DescriptorLimit32 dw 2 dup(?)
+avl proc
+    mov esi, edx
+    xor eax, eax
+    mov al, byte ptr [esi + 6]
+    rept 3
+        shl al, 1
+    endm
+    rept 7
+        shr al, 1
+    endm
+    ret
+endp
 
-TempByte1         db ?
-TempByte2         db ?
+bits proc
+    mov esi, edx
+    xor eax, eax
+    mov al, byte ptr [esi + 6]
+    shl al, 1
+    rept 7
+        shr al, 1
+    endm
+    ret
+endp
 
-GDTLabel dw 0FFFFh
-         dw 0
-         db 0
-         db 0
 
-         dw 0FFFFh
-         dw 0
-         db 10011010b
-         db 11001111b
+mode proc
+    mov esi, edx
+    xor eax, eax
+    mov al, byte ptr [esi + 5]
+    rept 4
+        shl al, 1
+    endm
+    rept 4
+        shr al, 1
+    endm
+    ret
+endp
 
-         dw 0FFFFh
-         dw 0
-         db 10010010b
-         db 11001111b
+limit proc
+    mov esi, edx
+    xor eax, eax
+    mov al, byte ptr [esi + 6]
+    rept 4
+        shl al, 1
+    endm
+    rept 8
+        shl eax, 1
+    endm
+    mov ah, byte ptr [esi + 1]
+    mov al, byte ptr [esi]
+    push bx
+    mov bl, byte ptr [esi + 6]
+    rept 7
+        shr bl, 1
+    endm
+    add eax, 1
+    cmp bl, 1
+    je multy
+    jmp skip
+    multy:
+        imul eax, 1000h
+    skip:
+    pop bx
+    ret
+endp
 
-         dw 1
-         dw 2
-         db 10010010b
-         db 00000000b
+maths proc
+    push edx
+    cmp al, 10
+    mov ah, al
+    jl notadd
+    add al, 7
+    notadd:
+    add al, 30h
+    mov [edi], al
+    mov dl, ch
+    add dl, 1
+    cmp dl, 16
+    jl write
+    sub dl, 15
+    write:
+    mov [edi + 1], dl
+    mov al, ah
+    pop edx
+    ret
+endp
 
-         dw 2
-         dw 1
-         db 10011010b
-         db 00000000b
+basepr proc
+    push eax
+    push ebx
+    push ecx
+    push edx
+    mov ebx, eax
+    cmp eax, 0FFFFFFFFh
+    irp count, <28, 24, 20, 16, 12, 8, 4, 0>
+        mov eax, ebx
+        rept count
+            shr eax, 1
+        endm
+        call maths
+        add EDI, 2
+        rept count
+            shl eax, 1
+        endm
+        sub ebx, eax
+    endm
+    pop edx
+    pop ecx
+    pop ebx
+    pop eax
+    ret
+endp
 
-AlignPDE  db 0
-PDE       dw 1024 dup(0)
+dlspr proc
+    push eax
+    push ebx
+    push ecx
+    push edx
+    mov ebx, eax
+    cmp eax, 0FFFFFFFFh
+    irp count, <1, 0>
+        mov eax, ebx
+        rept count
+            shr eax, 1
+        endm
+        call maths
+        add EDI, 2
+        rept count
+            shl eax, 1
+        endm
+        sub ebx, eax
+    endm
+    pop edx
+    pop ecx
+    pop ebx
+    pop eax
+    ret
+endp
 
-AlignPTE  db 0
-PTE       dw 1024*2 dup(0)
+dataxpr proc
+    cmp al, 2
+    jge data01
+    push ax
+    mov al, 27 ;; R
+    call maths
+    add EDI, 2
+    pop ax
+    call anyxxpr
+    ret
+    data01:
+    sub al, 2
+    push ax
+    mov al, 32 ;; W
+    call maths
+    add EDI, 2
+    pop ax
+    call anyxxpr
+    ret
+endp
 
-VidMsg     db 'Некорректный дескриптор$',0
-GoodMsg    db 'Descriptor OK$',0
-MsgBase    db 'Base=',0
-MsgLimit   db 'Limit=',0
-MsgAccess  db 'Access byte=',0
-MsgDPL     db 'DPL=',0
-MsgType    db 'Type=',0
+datapr proc
+    cmp al, 4
+    jge data1
+    push ax
+    push dx
+    mov [edi], 24 ;; ↑
+    mov dl, ch
+    add dl, 1
+    cmp dl, 16
+    jl write1
+    sub dl, 15
+    write1:
+    mov [edi + 1], dl
+    add EDI, 2
+    pop dx
+    pop ax
+    call dataxpr
+    ret
+    data1:
+    sub al, 4
+    push ax
+    push dx
+    mov [edi], 25 ;; ↑
+    mov dl, ch
+    add dl, 1
+    cmp dl, 16
+    jl write2
+    sub dl, 15
+    write2:
+    mov [edi + 1], dl
+    add EDI, 2
+    pop dx
+    pop ax
+    call dataxpr
+    ret
+endp
 
-Hex0X      db '0x',0
-CRLF       db 13,10,0
-OneCharBuff db 2 dup(0)
+anyxxpr proc
+    cmp al, 1
+    je code001
+    push ax
+    mov al, 23 ;; N
+    call maths
+    add EDI, 2
+    pop ax
+    ret
+    code001:
+    sub al, 1
+    push ax
+    mov al, 10 ;; A
+    call maths
+    add EDI, 2
+    pop ax
+    ret
+endp
 
-Db32 db 'D/B=32-bit$',0
-Db16 db 'D/B=16-bit$',0
-AvlYes db 'AVL=1$',0
-AvlNo  db 'AVL=0$',0
-G0     db 'G=0 (byte granularity)$',0
-G1Str  db 'G=1 (4KB granularity)$',0
-CodeExec db ' (Code execute+read)$',0
-DataRead db ' (Data read/write)$',0
-UnknownType db ' (Unknown type)$',0
+codexpr proc
+    cmp al, 2
+    jge code01
+    push ax
+    mov al, 14 ;; E
+    call maths
+    add EDI, 2
+    pop ax
+    call anyxxpr
+    ret
+    code01:
+    sub al, 2
+    push ax
+    mov al, 27 ;; R
+    call maths
+    add EDI, 2
+    pop ax
+    call anyxxpr
+    ret
+endp
 
-CurRow dw ?
-CurCol dw ?
+codepr proc
+    cmp al, 4
+    jge code1
+    push ax
+    mov al, 23 ;; N
+    call maths
+    add EDI, 2
+    pop ax
+    call codexpr
+    ret
+    code1:
+    sub al, 4
+    push ax
+    mov al, 12 ;; N
+    call maths
+    add EDI, 2
+    pop ax
+    call codexpr
+    ret
+endp
 
-data ends
+modepr proc
+    push eax
+    push ebx
+    push ecx
+    push edx
+    cmp al, 8
+    jge code
+    push ax
+    mov al, 13  ;; D
+    call maths
+    add EDI, 2
+    pop ax
+    call datapr
+    jmp return
+    code:
+    sub al, 8
+    push ax
+    mov al, 12  ;; C
+    call maths
+    add EDI, 2
+    pop ax
+    call codepr
+    return:
+    pop edx
+    pop ecx
+    pop ebx
+    pop eax
+    ret
+endp
 
-code segment
-start:
-  mov ax, data
-  mov ds, ax
-  mov ax, 3
-  int 10h
-  cli
-  xor ax, ax
-  mov ss, ax
-  mov sp, 1000h
-  mov bx, (5*8 - 1)
-  mov si, offset OrgGdtSize
-  mov [ds:si], bx
-  mov si, offset OrgGdtSize
-  mov ax, [ds:si]
-  mov si, offset OrgGdtDesc
-  mov [ds:si], ax
-  mov bx, offset GDTLabel
-  add si, 2
-  mov [ds:si], bx
-  mov bx, ds
-  add si, 2
-  mov [ds:si], bx
-  db 0Fh, 01h, 16h
-  dw OrgGdtDesc
-  db 66h,0Fh,020h,0C0h
-  db 66h,81h,0E0h,0FEh,0FFh,0FFh,0FFh
-  db 66h,81h,0C8h,01h,0,0,0
-  db 66h,0Fh,022h,0C0h
-  db 0EAh
-  dw StartPM
-  dw 8
+logic proc ;;EDX - адрес регистра, BX - оффсет в видеопамяти
+    push edx
+    call base
+    mov EDI, 012000h
+    add EDI, eBX
+    call basepr
+    add edi, 2
+    call limit
+    call basepr
+    add edi, 2
+    call mode
+    call modepr
+    add edi, 2
+    call dls
+    call dlspr
+    add edi, 2
+    call present
+    call maths
+    add edi, 4
+    call avl
+    call maths
+    add edi, 4
+    call bits
+    call maths
+    pop edx
+    ret
+endp 
 
-StartPM:
-  mov ax,10h
-  mov ds,ax
-  mov es,ax
-  mov ss,ax
-  mov sp,2000h
-  mov bx, offset PDE
-  mov si, offset PdeBase
-  mov [ds:si], bx
-  mov bx, ds
-  add si,2
-  mov [ds:si], bx
-  mov bx, offset PTE
-  mov si, offset PteBase
-  mov [ds:si], bx
-  mov bx, ds
-  add si,2
-  mov [ds:si], bx
-  mov si, offset PDE
-  mov cx, 1024
-InitPDE:
-  push cx
-  mov dx,cx
-  dec dx
-  cmp dx,0
-  jne FillZeroPde
-  mov di, offset PteBase
-  mov ax,[ds:di]
-  mov dx,[ds:di+2]
-  mov bp,12
-ShiftPDEloop:
-  clc
-  rcr dx,1
-  clc
-  rcr ax,1
-  dec bp
-  jnz ShiftPDEloop
-  mov [ds:si], ax
-  add si,2
-  mov [ds:si], dx
-  add si,2
-  sub si,4
-  or word ptr [ds:si],3
-  add si,4
-  pop cx
-  loop InitPDE
-  jmp PDEdone
 
-FillZeroPde:
-  mov word ptr [ds:si],0
-  add si,2
-  mov word ptr [ds:si],0
-  add si,2
-  pop cx
-  loop InitPDE
+ENTRY_POINT:
+; загрузим сегментные регистры селекторами на соответствующие дескрипторы:
+                 mov           AX,00010000b      ; селектор на второй дескриптор (DATA_descr)
+     mov           DS,AX                         ; в DS его        
+     mov           ES,AX                         ; его же - в ES
 
-PDEdone:
-  mov si, offset PTE
-  mov cx,1024
-InitPTE:
-  mov dx,cx
-  dec dx
-  cmp dx,2
-  je VideoPage
-  xor ax,ax
-  mov bp,12
-ShiftLeftPte:
-  add ax,ax
-  rcl dx,1
-  dec bp
-  jnz ShiftLeftPte
-  jmp SetFrame
 
-VideoPage:
-  mov dx,0
-  mov ax,0B800h
+ 
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+; создать каталог страниц
+                mov        EDI,00100000h               ; его физический адрес - 1 Мб
+    mov        EAX,00101007h               ; адрес таблицы 0 = 1 Мб + 4 Кб
+    stosd                              ; записать первый элемент каталога
+    mov        ECX,1023                    ; остальные элементы каталога -
+    xor        EAX,EAX                     ; нули
+    rep                 stosd
+; заполнить таблицу страниц 0
+                mov        EAX,00000007h               ; 0 - адрес страницы 0
+    mov        ECX,1024                    ; число страниц в таблице
+fill_page_table:
+    stosd                              ; записать элемент таблицы
+    add        EAX,00001000h               ; добавить к адресу 4096 байтов
+    loop                fill_page_table        ; и повторить для всех элементов
+; поместить адрес каталога страниц в CR3
+                mov        EAX,00100000h               ; базовый адрес = 1 Мб
+    mov        CR3,EAX
+; включить страничную адресацию,
+                mov        EAX,CR0
+ or        EAX,80000000h
+     mov           CR0,EAX
+; а теперь изменить физический адрес страницы 12000h на 0B8000h
+                mov        EAX,000B8007h
+    mov        ES:00101000h+012h*4,EAX
 
-SetFrame:
-  mov bp,12
-ShiftRightPte:
-  clc
-  rcr dx,1
-  clc
-  rcr ax,1
-  dec bp
-  jnz ShiftRightPte
-  mov [ds:si], ax
-  add si,2
-  mov [ds:si], dx
-  add si,2
-  sub si,4
-  or word ptr [ds:si],3
-  add si,4
-  loop InitPTE
-  mov di, offset PdeBase
-  mov ax,[ds:di]
-  mov dx,[ds:di+2]
-  mov bp,12
-ShiftCr3:
-  clc
-  rcr dx,1
-  clc
-  rcr ax,1
-  dec bp
-  jnz ShiftCr3
-  push ax
-  push dx
-  db 66h,58h
-  db 0Fh,022h,0D8h
-  db 66h,0Fh,020h,0C0h
-  db 66h,81h,0C8h,0,0,0,80h
-  db 66h,0Fh,022h,0C0h
-
-NextStep:
-  mov ax,0B800h
-  mov es,ax
-  xor ax,ax
-  mov si, offset CurRow
-  mov [ds:si], ax
-  mov si, offset CurCol
-  mov [ds:si], ax
-  mov cx,5
-  xor si,si
-  xor bx,bx
-ShowGDTLoop:
-  push cx
-  push si
-  push bx
-  mov di, si
-  add di, GDTLabel
-  call DecodeDescriptor
-  pop bx
-  pop si
-  add si,8
-  pop cx
-  inc bx
-  loop ShowGDTLoop
-
-LoopForever:
-  jmp LoopForever
-
-DecodeDescriptor proc near
-  push ax
-  push dx
-  push bp
-  push si
-  push di
-  mov bp, di
-  mov ax,[ds:bp]
-  mov si, offset DescLimitLow
-  mov [ds:si], ax
-  add bp,2
-  mov ax,[ds:bp]
-  mov si, offset DescBaseLow
-  mov [ds:si], ax
-  add bp,2
-  mov al,[ds:bp]
-  mov si, offset DescBaseMid
-  mov [ds:si], al
-  inc bp
-  mov al,[ds:bp]
-  mov si, offset DescAccess
-  mov [ds:si], al
-  inc bp
-  mov al,[ds:bp]
-  mov si, offset DescLimitFlags
-  mov [ds:si], al
-  inc bp
-  mov al,[ds:bp]
-  mov si, offset DescBaseHigh
-  mov [ds:si], al
-  mov si, offset DescAccess
-  mov al,[ds:si]
-  mov si, offset DescType
-  mov [ds:si], al
-  call MakeDescriptorBase
-  call MakeDescriptorLimit
-  mov si, offset DescAccess
-  mov al,[ds:si]
-  test al,10000000b
-  jz MarkInvalid
-  test al,00010000b
-  jz MarkInvalid
-  jmp OutputDesc
-
-MarkInvalid:
-  push bx
-  call PrintStringError
-  pop bx
-  jmp DoneDecode
-
-OutputDesc:
-  push bx
-  call PrintStringOK
-  pop bx
-  call PrintBaseField
-  call PrintLimitField
-  call PrintAttributes
-DoneDecode:
-  pop di
-  pop si
-  pop bp
-  pop dx
-  pop ax
-  ret
-DecodeDescriptor endp
-
-MakeDescriptorBase proc near
-  push ax
-  push bx
-  push cx
-  push dx
-  push si
-  push di
-  mov si, offset DescBaseLow
-  mov ax,[ds:si]
-  mov di, offset DescriptorBase32
-  mov [ds:di], ax
-  mov si, offset DescBaseMid
-  xor ah,ah
-  mov al,[ds:si]
-  mov cx,16
-ShiftMidBase:
-  clc
-  rcl ax,1
-  dec cx
-  jnz ShiftMidBase
-  mov si, offset DescriptorBase32
-  mov dx,[ds:si]
-  add dx,ax
-  mov [ds:si], dx
-  mov si, offset DescBaseHigh
-  xor ax,ax
-  mov al,[ds:si]
-  mov cx,24
-ShiftHighBase:
-  clc
-  rcl ax,1
-  dec cx
-  jnz ShiftHighBase
-  mov si, offset DescriptorBase32
-  mov dx,[ds:si]
-  add dx,ax
-  mov [ds:si], dx
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  ret
-MakeDescriptorBase endp
-
-MakeDescriptorLimit proc near
-  push ax
-  push bx
-  push cx
-  push dx
-  push si
-  push di
-  mov si, offset DescLimitLow
-  mov ax,[ds:si]
-  mov di, offset DescriptorLimit32
-  mov [ds:di], ax
-  mov si, offset DescLimitFlags
-  mov al,[ds:si]
-  and al,0Fh
-  mov cx,16
-ShiftLimHigh:
-  clc
-  rcl ax,1
-  dec cx
-  jnz ShiftLimHigh
-  mov si, offset DescriptorLimit32
-  mov dx,[ds:si]
-  add dx,ax
-  mov [ds:si], dx
-  mov si, offset DescLimitFlags
-  mov al,[ds:si]
-  and al,80h
-  cmp al,0
-  je LDone
-  mov si, offset DescriptorLimit32
-  mov dx,[ds:si]
-  mov cx,12
-ShiftLimit32:
-  add dx,dx
-  dec cx
-  jnz ShiftLimit32
-  mov bx,0FFFh
-  add dx,bx
-  mov si, offset DescriptorLimit32
-  mov [ds:si], dx
-LDone:
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  ret
-MakeDescriptorLimit endp
-
-PrintBaseField proc near
-  push ax
-  push bx
-  push cx
-  push dx
-  push si
-  push di
-  push ds
-  mov ax, ds
-  mov si, offset MsgBase
-  call PrintColoredLine
-  pop ds
-  push ds
-  mov ax, ds
-  mov si, offset Hex0X
-  call PrintColoredLine
-  pop ds
-  mov di, offset DescriptorBase32
-  mov dx,[ds:di]
-  call PrintHex16
-  push ds
-  mov ax, ds
-  mov si, offset CRLF
-  call PrintColoredLine
-  pop ds
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  ret
-PrintBaseField endp
-
-PrintLimitField proc near
-  push ax
-  push bx
-  push cx
-  push dx
-  push si
-  push di
-  push ds
-  mov ax, ds
-  mov si, offset MsgLimit
-  call PrintColoredLine
-  pop ds
-  push ds
-  mov ax, ds
-  mov si, offset Hex0X
-  call PrintColoredLine
-  pop ds
-  mov di, offset DescriptorLimit32
-  mov dx,[ds:di]
-  call PrintHex16
-  push ds
-  mov ax, ds
-  mov si, offset CRLF
-  call PrintColoredLine
-  pop ds
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  ret
-PrintLimitField endp
-
-PrintAttributes proc near
-  push ax
-  push bx
-  push cx
-  push dx
-  push si
-  push di
-  mov si, offset DescAccess
-  mov al,[ds:si]
-  push ds
-  mov ax, ds
-  mov si, offset MsgAccess
-  call PrintColoredLine
-  pop ds
-  push ds
-  mov ax, ds
-  mov si, offset Hex0X
-  call PrintColoredLine
-  pop ds
-  push ax
-  call PrintHex8
-  pop ax
-  push ds
-  mov ax, ds
-  mov si, offset CRLF
-  call PrintColoredLine
-  pop ds
-  mov cl,2
-  mov bl,0
-GetDpl:
-  clc
-  rcr al,1
-  rcr bl,1
-  dec cl
-  jnz GetDpl
-  push ds
-  mov ax, ds
-  mov si, offset MsgDPL
-  call PrintColoredLine
-  pop ds
-  add bl,'0'
-  push ax
-  push bx
-  call PrintChar
-  pop bx
-  pop ax
-  push ds
-  mov ax, ds
-  mov si, offset CRLF
-  call PrintColoredLine
-  pop ds
-  mov si, offset DescAccess
-  mov al,[ds:si]
-  mov dx,00001111b
-  and ax,dx
-  push ax
-  call PrintTypeField
-  pop ax
-  mov si, offset DescLimitFlags
-  mov al,[ds:si]
-  mov dx,80h
-  and al,dl
-  cmp al,0
-  je Gbit0
-  push bx
-  mov bl,1
-  call PrintGbit
-  pop bx
-  jmp CheckDB
-Gbit0:
-  push bx
-  xor bl,bl
-  call PrintGbit
-  pop bx
-CheckDB:
-  mov si, offset DescLimitFlags
-  mov al,[ds:si]
-  mov dx,01000000b
-  and al,dl
-  cmp al,0
-  je is16
-  push ds
-  mov ax, ds
-  mov si, offset Db32
-  call PrintColoredLine
-  pop ds
-  jmp AvlCheck
-is16:
-  push ds
-  mov ax, ds
-  mov si, offset Db16
-  call PrintColoredLine
-  pop ds
-AvlCheck:
-  mov si, offset DescLimitFlags
-  mov al,[ds:si]
-  mov dx,00010000b
-  and al,dl
-  cmp al,0
-  je Avl0
-  push ds
-  mov ax, ds
-  mov si, offset AvlYes
-  call PrintColoredLine
-  pop ds
-  jmp AttrDone
-Avl0:
-  push ds
-  mov ax, ds
-  mov si, offset AvlNo
-  call PrintColoredLine
-  pop ds
-AttrDone:
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  ret
-PrintAttributes endp
-
-PrintTypeField proc near
-  push ax
-  push bx
-  push cx
-  push dx
-  push si
-  push di
-  push ds
-  mov ax, ds
-  mov si, offset MsgType
-  call PrintColoredLine
-  pop ds
-  push ds
-  mov ax, ds
-  mov si, offset Hex0X
-  call PrintColoredLine
-  pop ds
-  push ax
-  call PrintHex8
-  pop ax
-  cmp al,0Ah
-  jne NotA
-  push ds
-  mov ax, ds
-  mov si, offset CodeExec
-  call PrintColoredLine
-  pop ds
-  jmp TDone
-NotA:
-  cmp al,2
-  jne No2
-  push ds
-  mov ax, ds
-  mov si, offset DataRead
-  call PrintColoredLine
-  pop ds
-  jmp TDone
-No2:
-  push ds
-  mov ax, ds
-  mov si, offset UnknownType
-  call PrintColoredLine
-  pop ds
-TDone:
-  push ds
-  mov ax, ds
-  mov si, offset CRLF
-  call PrintColoredLine
-  pop ds
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  ret
-PrintTypeField endp
-
-PrintGbit proc near
-  push ax
-  push bx
-  push cx
-  push dx
-  push si
-  push di
-  cmp bl,0
-  jne G1
-  push ds
-  mov ax, ds
-  mov si, offset G0
-  call PrintColoredLine
-  pop ds
-  jmp Gdone
-G1:
-  push ds
-  mov ax, ds
-  mov si, offset G1Str
-  call PrintColoredLine
-  pop ds
-Gdone:
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  ret
-PrintGbit endp
-
-PrintChar proc near
-  push si
-  push ds
-  push cx
-  push dx
-  push di
-  mov si, offset OneCharBuff
-  mov [ds:si], bl
-  inc si
-  mov byte ptr [ds:si],0
-  mov si, offset OneCharBuff
-  call PrintColoredLine
-  pop di
-  pop dx
-  pop cx
-  pop ds
-  pop si
-  ret
-PrintChar endp
-
-PrintHex16 proc near
-  push ax
-  push bx
-  push cx
-  push si
-  push di
-  mov bx, dx
-  mov cx,4
-NextNibble:
-  mov ax,bx
-  mov dx,0F000h
-  and ax,dx
-  mov si,12
-ShiftRight12:
-  clc
-  rcr ax,1
-  dec si
-  jnz ShiftRight12
-  add al,'0'
-  cmp al,'9'
-  jbe GoodDigit
-  add al,('A' - '9' - 1)
-GoodDigit:
-  push ax
-  call PrintChar
-  pop ax
-  mov si,4
-ShiftLeft4:
-  add bx,bx
-  dec si
-  jnz ShiftLeft4
-  dec cx
-  jnz NextNibble
-  pop di
-  pop si
-  pop cx
-  pop bx
-  pop ax
-  ret
-PrintHex16 endp
-
-PrintHex8 proc near
-  push ax
-  push bx
-  push cx
-  push dx
-  push si
-  push di
-  mov ah,0
-  mov bx, ax
-  mov cx,2
-NextNib:
-  mov ax,bx
-  mov dx,0F0h
-  and ax,dx
-  mov si,4
-ShiftR4:
-  clc
-  rcr ax,1
-  dec si
-  jnz ShiftR4
-  add al,'0'
-  cmp al,'9'
-  jbe GoodDig
-  add al,('A' - '9' -1)
-GoodDig:
-  push ax
-  call PrintChar
-  pop ax
-  mov si,4
-ShLeft4:
-  add bx,bx
-  dec si
-  jnz ShLeft4
-  dec cx
-  jnz NextNib
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  ret
-PrintHex8 endp
-
-PrintColoredLine proc near
-  push ax
-  push bx
-  push cx
-  push dx
-  push si
-  push di
-PrintLoop:
-  lodsb
-  cmp al,0
-  je Done
-  mov di, offset CurRow
-  mov ax,[ds:di]
-  mov di, offset CurCol
-  mov dx,[ds:di]
-  cmp ax,25
-  jae SkipWrite
-  cmp dx,80
-  jb WriteChar
-NewLine:
-  inc ax
-  mov di, offset CurRow
-  mov [ds:di], ax
-  xor dx,dx
-  mov di, offset CurCol
-  mov [ds:di], dx
-WriteChar:
-  mov cx, ax
-  xor ax, ax
-  mov bp,80
-RowLoop:
-  add ax, cx
-  dec bp
-  jnz RowLoop
-  add ax, dx
-  add ax, ax
-  mov di, ax
-  push ax
-  push bx
-  mov ah,07h
-  add ah, bl
-  and ah,0Fh
-  mov [es:di], ax
-  pop bx
-  pop ax
-  mov di, offset CurCol
-  mov dx,[ds:di]
-  inc dx
-  mov [ds:di], dx
-  jmp PrintLoop
-SkipWrite:
-  jmp PrintLoop
-Done:
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  ret
-PrintColoredLine endp
-
-PrintStringError proc near
-  push ax
-  push si
-  push ds
-  mov ax, ds
-  mov si, offset VidMsg
-  call PrintColoredLine
-  pop ds
-  pop si
-  pop ax
-  ret
-PrintStringError endp
-
-PrintStringOK proc near
-  push ax
-  push si
-  push ds
-  mov ax, ds
-  mov si, offset GoodMsg
-  call PrintColoredLine
-  pop ds
-  pop si
-  pop ax
-  ret
-PrintStringOK endp
-
-code ends
-end start
+        xor     EAX,EAX
+        sgdt    fword ptr GDTAddr
+        mov     di, offset GDTAddr
+        mov     ax, word ptr [di]
+        add     di, 2
+        mov     edx, dword ptr [di]
+        inc     ax
+        mov ch, 8
+        div     ch
+        mov cl, al
+        mov ch, 0
+        xor ebx, ebx
+        mov BX, 640
+        cycle: ;; CL CH - контроль цикла, EDX - адресс таблицы, BX - оффсет в видеопамяти
+            call logic
+            add edx, 8
+            add bx, 160
+            inc ch
+            cmp cl, ch
+            jne cycle 
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+mess1:
+; вывод mes1 по стандартному адресу (начало видеопамяти 0B8000h)
+    mov            EDI,012000h                ; для команды movsw, EDI = начало видепамяти
+    mov            ESI,PM_DATA                 ;
+    shl            ESI,4
+    add            ESI,offset mes1             ; ESI = адрес начала mes1
+    mov            ECX,mes_len                 ; длина текста в ECX
+    rep            movsw                       ; DS:ESI (наше сообщение) -> ES:EDI
+                                               ; (видеопамять)
+; вывод mes2 по НЕСТАНДАРТНОМУ АДРЕСУ 12000h:
+mess2:
+    mov            EDI,0120A0h     ; 12000h (уже можешь считать, что это
+                                    ; 0B8000h) + A0h
+    mov            ESI,PM_DATA
+    shl            ESI,4
+    add            ESI,offset mes2 ; ESI = адрес начала mes2
+    mov            ECX,mes_len     ; длина текста в ECX
+    rep            movsw           ; DS:ESI (наше сообщение) -> ES:12000h
+                                               ;(типа видеопамять)
+    
+    mov            EDI,012140h     ; 12000h (уже можешь считать, что это
+                                    ; 0B8000h) + A0h
+    mov            ESI,PM_DATA
+    shl            ESI,4
+    add            ESI,offset mes3 ; ESI = адрес начала mes2
+    mov            ECX,mes_len     ; длина текста в ECX
+    rep            movsw           ; DS:ESI (наше сообщение) -> ES:12000h
+                                               ;(типа видеопамять)
+    mov            EDI,0121E0h     ; 12000h (уже можешь считать, что это
+                                    ; 0B8000h) + A0h
+    mov            ESI,PM_DATA
+    shl            ESI,4
+    add            ESI,offset mes4 ; ESI = адрес начала mes2
+    mov            ECX,mes_len     ; длина текста в ECX
+    rep            movsw           ; DS:ESI (наше сообщение) -> ES:12000h
+                                               ;(типа видеопамять)
+ 
+ 
+    jmp            $                           ; погружаемся в вечный цикл
+PM_CODE         ends
+; -------------------------------------------------------------------------------------
+ 
+ 
+; СЕГМЕНТ ДАННЫХ (для Protected Mode)
+; -------------------------------------------------------------------------------------
+PM_DATA         segment        para public 'DATA' use32
+        assume         CS:PM_DATA
+ 
+GDTAddr dw ?
+        dd ?
+; сообщение, которое мы будем выводить на экран (оформим его в виде блока повторений irpc):
+mes1:
+irpc            mes1,          <1st block - BASE address, 2nd - LIMIT, 3rd - MODE,                              >
+                db             '&mes1&',0Bh
+endm
+mes2:
+irpc            mes2,          <Mode - D(ata)/C(ode), (Up)/(Down)/C(onformed)/N(ot conformed),                  >
+                db             '&mes2&',0Bh
+endm
+mes3:
+irpc            mes3,          <R(ead)/W(rite + read)/E(xecute only) A(vailable)/N(ot available)               >
+                db             '&mes3&',0Bh
+endm
+mes4:
+irpc            mes4,          <DPL (00 - 11), Present (0/1), Available bit (0/1), 0/1 32-bit mode              >
+                db             '&mes4&',0Bh
+endm
+mes_len         equ            80                  ; длина в байтах
+PM_DATA         ends
+; ----------------------------------------------------------------------------------------------  
+                end         @@start
