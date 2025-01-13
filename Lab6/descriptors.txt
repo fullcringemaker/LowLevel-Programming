@@ -1,0 +1,27 @@
+GlobalDescTable:
+
+; Нулевой дескриптор (обязан быть в GDT):
+NullDescriptor  db 8 dup(0)
+
+; Дескриптор кода:
+CodeDescriptor  db 0FFh,0FFh,00h,00h,00h,10011010b,11001111b,00h
+; Дескриптор данных:
+DataDescriptor  db 0FFh,0FFh,00h,00h,00h,10010010b,11001111b,00h
+
+; Несколько «произвольных» дескрипторов:
+Desc_01         db 0FFh,0FFh,01h,00h,00h,10010000b,11001111b,00h
+Desc_02         db 0FFh,0FFh,02h,00h,00h,10010001b,11001111b,00h
+Desc_03         db 0FFh,0FFh,03h,00h,00h,10010010b,11001111b,00h
+Desc_04         db 0FFh,0FFh,04h,00h,00h,10010011b,11001111b,00h
+Desc_05         db 0FFh,0FFh,05h,00h,00h,10010100b,11001111b,00h
+Desc_06         db 0FFh,0FFh,06h,00h,00h,10010101b,11001111b,00h
+Desc_07         db 0FFh,0FFh,07h,00h,00h,10010110b,11001111b,00h
+Desc_08         db 0FFh,0FFh,08h,00h,00h,10010111b,11001111b,00h
+Desc_09         db 0FFh,0FFh,09h,00h,00h,10011000b,11001111b,00h
+Desc_0A         db 0FFh,0FFh,0Ah,00h,00h,10011001b,11001111b,00h
+Desc_0B         db 0FFh,0FFh,0Bh,00h,00h,10011010b,11001111b,00h
+Desc_0C         db 0FFh,0FFh,0Ch,00h,00h,10011011b,11001111b,00h
+Desc_0D         db 0FFh,0FFh,0Dh,00h,00h,10011100b,11001111b,00h
+Desc_0E         db 0FFh,0FFh,0Eh,00h,00h,10011101b,11001111b,00h
+Desc_0F         db 0FFh,0FFh,0Fh,00h,00h,10011110b,11001111b,00h
+Desc_10         db 0FFh,0FFh,10h,00h,00h,10011111b,11001111b,00h
