@@ -79,7 +79,6 @@ InitSegment ends
 InitStackSegment segment para stack 'STACK' use16
                 db  100h dup(?)
 InitStackSegment ends
-
 MainPMSegment segment para public 'CODE' use32
         assume  CS:MainPMSegment, DS:MainPMData
 
@@ -281,7 +280,7 @@ ShowDataProperties proc
     jge  data1
     push ax
     push dx
-    mov  [edi], 24    ;; '↑'
+    mov  [edi], 24    
     mov  dl, ch
     add  dl, 1
     cmp  dl, 16
@@ -298,7 +297,7 @@ data1:
     sub  al, 4
     push ax
     push dx
-    mov  [edi], 25    ;; '↓'
+    mov  [edi], 25    
     mov  dl, ch
     add  dl, 1
     cmp  dl, 16
@@ -406,41 +405,65 @@ endp
 
 ParseDescriptorEntry proc  
     push edx
-    ; BASE
+    
+    call CheckPresenceFlag
+    cmp al, 0
+    je invalid_descriptor
+    
+    call IdentifySegMode
+    cmp al, 0
+    je check_null_desc
+    
+normal_descriptor:
     call AcquireSegmentBase
     mov  EDI, 012000h
     add  EDI, EBX
     call PresentBaseValue
     add  EDI, 2
-    ; LIMIT
     call ComputeSegLimit
     call PresentBaseValue
     add  EDI, 2
-    ; MODE
     call IdentifySegMode
     call DisplayModeInfo
     add  EDI, 2
-    ; DLS
     call UnpackDLSField
     call DisplayDLSValue
     add  EDI, 2
-    ; PRESENCE
     call CheckPresenceFlag
     call FormatInHex
     add  EDI, 4
-    ; AVL
     call EvaluateAVLBit
     call FormatInHex
     add  EDI, 4
-    ; GRANULARITY
     call RetrieveGranularity
     call FormatInHex
+    jmp proc_end
+    
+check_null_desc:
+    cmp edx, offset NullDescriptor
+    je normal_descriptor
+    
+invalid_descriptor:
+    mov  EDI, 012000h
+    add  EDI, EBX
+    push eax
+    push ecx
+    mov  ecx, 20
+    mov  al, '#'
+invalid_loop:
+    mov  [edi], al
+    mov  byte ptr [edi+1], 0Eh
+    add  edi, 2
+    loop invalid_loop
+    pop  ecx
+    pop  eax
+
+proc_end:
     pop  edx
     ret
 endp
 
 BeginProtectedMode:
-
                 mov     AX, 00010000b 
                 mov     DS, AX
                 mov     ES, AX
@@ -485,7 +508,6 @@ IterateDescEntries:
                 cmp     CL, CH
                 jne     IterateDescEntries
 
-; Вывод четырёх сообщений по разным смещениям 
 PrintBlock1:
                 mov     EDI, 012000h
                 mov     ESI, MainPMData
@@ -517,7 +539,7 @@ PrintBlock4:
                 add     ESI, offset descInfoD
                 mov     ECX, descInfoSize
                 rep     movsw
-                jmp     $   ; Вечный цикл
+                jmp     $
 
 MainPMSegment ends
 
