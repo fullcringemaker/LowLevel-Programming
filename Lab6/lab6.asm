@@ -1,149 +1,125 @@
- 
-; TASM:
-; TASM /m PM.asm
-; TLINK /x /3 PM.obj
-; PM.exe
- 
-        .386p                                           ; разрешить привилегированные инструкции i386
-       
-; СЕГМЕНТ КОДА (для Real Mode)
-; ----------------------------------------------------------------------------------
-RM_CODE     segment     para public 'CODE' use16
-        assume      CS:RM_CODE,SS:RM_STACK
-@@start:
-                    mov                 AX,03h
-                    int                 10h            ; текстовый режим 80x25 + очистка экрана
+;------------------------------------------------------------------------------
+;  Сборка (TASM):
+;    TASM /m lab6.asm
+;    TLINK /x /3 lab6.obj
+;    lab6.exe
+;------------------------------------------------------------------------------
+
+        .386p                ; Разрешить команды 386 и привилегированные инструкции
+
+InitSegment segment para public 'CODE' use16
+        assume CS:InitSegment, SS:InitStackSegment
+
+RealInitEntry:
+                mov     AX, 03h
+                int     10h            ; текстовый режим 80x25 + очистка экрана
                
-; открываем линию А20 (для 32-х битной адресации):
-        in      AL,92h
-        or      AL,2
-        out     92h,AL
- 	
-; вычисляем линейный адрес метки ENTRY_POINT (точка входа в защищенный режим):
-        xor     EAX,EAX             ; обнуляем регистра EAX
-        mov     AX,PM_CODE          ; AX = номер сегмента PM_CODE
-        shl     EAX,4               ; EAX = линейный адрес PM_CODE
-        add     EAX,offset ENTRY_POINT      ; EAX = линейный адрес ENTRY_POINT
-        mov     dword ptr ENTRY_OFF,EAX     ; сохраняем его в переменной    
-; (кстати, подобный "трюк" называется SMC или Self Modyfing Code - самомодифицирующийся код)
- 
-; теперь надо вычислить линейный адрес GDT (для загрузки регистра GDTR):
-        xor     EAX,EAX
-        mov     AX,RM_CODE          ; AX = номер сегмента RM_CODE
-        shl     EAX,4               ; EAX = линейный адрес RM_CODE
-        add     AX,offset GDT           ; теперь EAX = линейный адрес GDT
- 
-; линейный адрес GDT кладем в заранее подготовленную переменную:
-        mov     dword ptr GDTR+2,EAX
-; а подобный трюк назвать SMC уже нельзя, потому как по сути мы модифицируем данные <img src="styles/smiles_s/smile3.gif" class="mceSmilie" alt=":smile3:" title="Smile3    :smile3:">
- 
-; собственно, загрузка регистра GDTR:
-        lgdt        fword ptr GDTR
- 
-; запрет маскируемых прерываний:
-        cli
- 
-; запрет немаскируемых прерываний:
-        in      AL,70h
-        or      AL,80h
-        out     70h,AL
- 
-; переключение в защищенный режим:
-        mov     EAX,CR0
-        or      AL,1
-        mov     CR0,EAX
- 
-; загрузить новый селектор в регистр CS
-        db      66h             ; префикс изменения разрядности операнда
-        db      0EAh                ; опкод команды JMP FAR
-ENTRY_OFF   dd      ?               ; 32-битное смещение
-        dw      00001000b           ; селектор первого дескриптора (CODE_descr)
- 
-; ТАБЛИЦА ГЛОБАЛЬНЫХ ДЕСКРИПТОРОВ:
-GDT:  
-; нулевой дескриптор (обязательно должен присутствовать в GDT!):
-NULL_descr  db      8 dup(0)
-CODE_descr  db      0FFh,0FFh,00h,00h,00h,10011010b,11001111b,00h
-DATA_descr  db      0FFh,0FFh,00h,00h,00h,10010010b,11001111b,00h
-MY_descr1   db      0FFh,0FFh,01h,00h,00h,10010000b,11001111b,00h
-MY_descr2   db      0FFh,0FFh,02h,00h,00h,10010001b,11001111b,00h
-MY_descr3   db      0FFh,0FFh,03h,00h,00h,10010010b,11001111b,00h
-MY_descr4   db      0FFh,0FFh,04h,00h,00h,10010011b,11001111b,00h
-MY_descr5   db      0FFh,0FFh,05h,00h,00h,10010100b,11001111b,00h
-MY_descr6   db      0FFh,0FFh,06h,00h,00h,10010101b,11001111b,00h
-MY_descr7   db      0FFh,0FFh,07h,00h,00h,10010110b,11001111b,00h
-MY_descr8   db      0FFh,0FFh,08h,00h,00h,10010111b,11001111b,00h
-MY_descr9   db      0FFh,0FFh,09h,00h,00h,10011000b,11001111b,00h
-MY_descr10  db      0FFh,0FFh,0Ah,00h,00h,10011001b,11001111b,00h
-MY_descr11  db      0FFh,0FFh,0Bh,00h,00h,10011010b,11001111b,00h
-MY_descr12  db      0FFh,0FFh,0Ch,00h,00h,10011011b,11001111b,00h
-MY_descr13  db      0FFh,0FFh,0Dh,00h,00h,10011100b,11001111b,00h
-MY_descr14  db      0FFh,0FFh,0Eh,00h,00h,10011101b,11001111b,00h
-MY_descr15  db      0FFh,0FFh,0Fh,00h,00h,10011110b,11001111b,00h
-MY_descr16  db      0FFh,0FFh,10h,00h,00h,10011111b,11001111b,00h
+; Открывание линии А20 (для 32-битной адресации):
+                in      AL,92h
+                or      AL,2
+                out     92h,AL
+                xor     EAX, EAX
+                mov     AX, MainPMSegment
+                shl     EAX, 4
+                add     EAX, offset BeginProtectedMode
+                mov     dword ptr NewEntryOffset, EAX
+                xor     EAX, EAX
+                mov     AX, InitSegment
+                shl     EAX, 4
+                add     AX, offset GlobalDescTable
+                mov     dword ptr GDTRRecord+2, EAX
+                lgdt    fword ptr GDTRRecord
+                cli
+                in      AL, 70h
+                or      AL, 80h
+                out     70h, AL
+                mov     EAX, CR0
+                or      AL, 1
+                mov     CR0, EAX
+                db      66h            
+                db      0EAh           
+NewEntryOffset  dd      ?             
+                dw      00001000b      
 
-GDT_size    equ         $-GDT               ; размер GDT
- 
-GDTR        dw      GDT_size-1          ; 16-битный лимит GDT
-   dd      ?               ; здесь будет 32-битный линейный адрес GDT
+GlobalDescTable:
 
-RM_CODE         ends
-; -----------------------------------------------------------------------------
- 
- 
- 
-; СЕГМЕНТ СТЕКА (для Real Mode)
-; -----------------------------------------------------------------------------
-RM_STACK       segment          para stack 'STACK' use16
-            db     100h dup(?)         ; 256 байт под стек - это даже много
-RM_STACK       ends
-; -----------------------------------------------------------------------------
- 
- 
- 
-; СЕГМЕНТ КОДА (для Protected Mode)
-; -----------------------------------------------------------------------------
-PM_CODE     segment     para public 'CODE' use32
-        assume      CS:PM_CODE,DS:PM_DATA
+; Нулевой дескриптор (обязан быть в GDT):
+NullDescriptor  db 8 dup(0)
 
-base proc
-    mov esi, edx
-    xor eax, eax
-    mov ah, byte ptr [esi + 7]
-    mov al, byte ptr [esi + 4]
+; Дескриптор кода:
+CodeDescriptor  db 0FFh,0FFh,00h,00h,00h,10011010b,11001111b,00h
+; Дескриптор данных:
+DataDescriptor  db 0FFh,0FFh,00h,00h,00h,10010010b,11001111b,00h
+
+; Несколько «произвольных» дескрипторов:
+Desc_01         db 0FFh,0FFh,01h,00h,00h,10010000b,11001111b,00h
+Desc_02         db 0FFh,0FFh,02h,00h,00h,10010001b,11001111b,00h
+Desc_03         db 0FFh,0FFh,03h,00h,00h,10010010b,11001111b,00h
+Desc_04         db 0FFh,0FFh,04h,00h,00h,10010011b,11001111b,00h
+Desc_05         db 0FFh,0FFh,05h,00h,00h,10010100b,11001111b,00h
+Desc_06         db 0FFh,0FFh,06h,00h,00h,10010101b,11001111b,00h
+Desc_07         db 0FFh,0FFh,07h,00h,00h,10010110b,11001111b,00h
+Desc_08         db 0FFh,0FFh,08h,00h,00h,10010111b,11001111b,00h
+Desc_09         db 0FFh,0FFh,09h,00h,00h,10011000b,11001111b,00h
+Desc_0A         db 0FFh,0FFh,0Ah,00h,00h,10011001b,11001111b,00h
+Desc_0B         db 0FFh,0FFh,0Bh,00h,00h,10011010b,11001111b,00h
+Desc_0C         db 0FFh,0FFh,0Ch,00h,00h,10011011b,11001111b,00h
+Desc_0D         db 0FFh,0FFh,0Dh,00h,00h,10011100b,11001111b,00h
+Desc_0E         db 0FFh,0FFh,0Eh,00h,00h,10011101b,11001111b,00h
+Desc_0F         db 0FFh,0FFh,0Fh,00h,00h,10011110b,11001111b,00h
+Desc_10         db 0FFh,0FFh,10h,00h,00h,10011111b,11001111b,00h
+
+GDTTableSize    equ  ($ - GlobalDescTable)
+
+GDTRRecord      dw   GDTTableSize - 1
+                dd   ?
+
+InitSegment ends
+
+InitStackSegment segment para stack 'STACK' use16
+                db  100h dup(?)
+InitStackSegment ends
+MainPMSegment segment para public 'CODE' use32
+        assume  CS:MainPMSegment, DS:MainPMData
+
+AcquireSegmentBase proc
+    mov  esi, edx
+    xor  eax, eax
+    mov  ah, byte ptr [esi + 7]
+    mov  al, byte ptr [esi + 4]
     rept 16
         shl eax, 1
     endm
-    mov ah, byte ptr [esi + 3]
-    mov al, byte ptr [esi + 2]
+    mov  ah, byte ptr [esi + 3]
+    mov  al, byte ptr [esi + 2]
     ret
 endp
 
-dls proc
-    mov esi, edx
-    xor eax, eax
-    mov al, byte ptr [esi + 5]
-    shl al, 1
+UnpackDLSField proc
+    mov  esi, edx
+    xor  eax, eax
+    mov  al, byte ptr [esi + 5]
+    shl  al, 1
     rept 6
         shr al, 1
     endm
     ret
 endp
 
-present proc
-    mov esi, edx
-    xor eax, eax
-    mov al, byte ptr [esi + 5]
+CheckPresenceFlag proc
+    mov  esi, edx
+    xor  eax, eax
+    mov  al, byte ptr [esi + 5]
     rept 7
         shr al, 1
     endm
     ret
 endp
 
-avl proc
-    mov esi, edx
-    xor eax, eax
-    mov al, byte ptr [esi + 6]
+EvaluateAVLBit proc
+    mov  esi, edx
+    xor  eax, eax
+    mov  al, byte ptr [esi + 6]
     rept 3
         shl al, 1
     endm
@@ -153,22 +129,21 @@ avl proc
     ret
 endp
 
-bits proc
-    mov esi, edx
-    xor eax, eax
-    mov al, byte ptr [esi + 6]
-    shl al, 1
+RetrieveGranularity proc
+    mov  esi, edx
+    xor  eax, eax
+    mov  al, byte ptr [esi + 6]
+    shl  al, 1
     rept 7
         shr al, 1
     endm
     ret
 endp
 
-
-mode proc
-    mov esi, edx
-    xor eax, eax
-    mov al, byte ptr [esi + 5]
+IdentifySegMode proc
+    mov  esi, edx
+    xor  eax, eax
+    mov  al, byte ptr [esi + 5]
     rept 4
         shl al, 1
     endm
@@ -178,56 +153,56 @@ mode proc
     ret
 endp
 
-limit proc
-    mov esi, edx
-    xor eax, eax
-    mov al, byte ptr [esi + 6]
+ComputeSegLimit proc
+    mov  esi, edx
+    xor  eax, eax
+    mov  al, byte ptr [esi + 6]
     rept 4
-        shl al, 1
+        shl eax, 1
     endm
     rept 8
         shl eax, 1
     endm
-    mov ah, byte ptr [esi + 1]
-    mov al, byte ptr [esi]
+    mov  ah, byte ptr [esi + 1]
+    mov  al, byte ptr [esi]
     push bx
-    mov bl, byte ptr [esi + 6]
+    mov  bl, byte ptr [esi + 6]
     rept 7
         shr bl, 1
     endm
-    add eax, 1
-    cmp bl, 1
-    je multy
-    jmp skip
-    multy:
-        imul eax, 1000h
-    skip:
-    pop bx
+    add  eax, 1
+    cmp  bl, 1
+    je   multy
+    jmp  skip
+multy:
+    imul eax, 1000h
+skip:
+    pop  bx
     ret
 endp
 
-maths proc
+FormatInHex proc
     push edx
-    cmp al, 10
-    mov ah, al
-    jl notadd
-    add al, 7
-    notadd:
-    add al, 30h
-    mov [edi], al
-    mov dl, ch
-    add dl, 1
-    cmp dl, 16
-    jl write
-    sub dl, 15
-    write:
-    mov [edi + 1], dl
-    mov al, ah
-    pop edx
+    cmp  al, 10
+    mov  ah, al
+    jl   noAdd
+    add  al, 7
+noAdd:
+    add  al, 30h
+    mov  [edi], al
+    mov  dl, ch
+    add  dl, 1
+    cmp  dl, 16
+    jl   writePos
+    sub  dl, 15
+writePos:
+    mov  [edi + 1], dl
+    mov  al, ah
+    pop  edx
     ret
 endp
 
-basepr proc
+PresentBaseValue proc
     push eax
     push ebx
     push ecx
@@ -239,12 +214,12 @@ basepr proc
         rept count
             shr eax, 1
         endm
-        call maths
-        add EDI, 2
+        call FormatInHex
+        add  EDI, 2
         rept count
             shl eax, 1
         endm
-        sub ebx, eax
+        sub  ebx, eax
     endm
     pop edx
     pop ecx
@@ -253,7 +228,7 @@ basepr proc
     ret
 endp
 
-dlspr proc
+DisplayDLSValue proc
     push eax
     push ebx
     push ecx
@@ -265,12 +240,12 @@ dlspr proc
         rept count
             shr eax, 1
         endm
-        call maths
-        add EDI, 2
+        call FormatInHex
+        add  EDI, 2
         rept count
             shl eax, 1
         endm
-        sub ebx, eax
+        sub  ebx, eax
     endm
     pop edx
     pop ecx
@@ -279,307 +254,323 @@ dlspr proc
     ret
 endp
 
-dataxpr proc
-    cmp al, 2
-    jge data01
+PrintDataClassification proc
+    cmp  al, 2
+    jge  data01
     push ax
-    mov al, 27 ;; R
-    call maths
-    add EDI, 2
-    pop ax
-    call anyxxpr
+    mov  al, 27  
+    call FormatInHex
+    add  EDI, 2
+    pop  ax
+    call ShowGeneralAttr
     ret
-    data01:
-    sub al, 2
+data01:
+    sub  al, 2
     push ax
-    mov al, 32 ;; W
-    call maths
-    add EDI, 2
-    pop ax
-    call anyxxpr
+    mov  al, 32  
+    call FormatInHex
+    add  EDI, 2
+    pop  ax
+    call ShowGeneralAttr
     ret
 endp
 
-datapr proc
-    cmp al, 4
-    jge data1
+ShowDataProperties proc
+    cmp  al, 4
+    jge  data1
     push ax
     push dx
-    mov [edi], 24 ;; ↑
-    mov dl, ch
-    add dl, 1
-    cmp dl, 16
-    jl write1
-    sub dl, 15
-    write1:
-    mov [edi + 1], dl
-    add EDI, 2
-    pop dx
-    pop ax
-    call dataxpr
+    mov  [edi], 24    
+    mov  dl, ch
+    add  dl, 1
+    cmp  dl, 16
+    jl   up1
+    sub  dl, 15
+up1:
+    mov  [edi + 1], dl
+    add  EDI, 2
+    pop  dx
+    pop  ax
+    call PrintDataClassification
     ret
-    data1:
-    sub al, 4
+data1:
+    sub  al, 4
     push ax
     push dx
-    mov [edi], 25 ;; ↑
-    mov dl, ch
-    add dl, 1
-    cmp dl, 16
-    jl write2
-    sub dl, 15
-    write2:
-    mov [edi + 1], dl
-    add EDI, 2
-    pop dx
-    pop ax
-    call dataxpr
+    mov  [edi], 25    
+    mov  dl, ch
+    add  dl, 1
+    cmp  dl, 16
+    jl   up2
+    sub  dl, 15
+up2:
+    mov  [edi + 1], dl
+    add  EDI, 2
+    pop  dx
+    pop  ax
+    call PrintDataClassification
     ret
 endp
 
-anyxxpr proc
-    cmp al, 1
-    je code001
+ShowGeneralAttr proc
+    cmp  al, 1
+    je   code001
     push ax
-    mov al, 23 ;; N
-    call maths
-    add EDI, 2
-    pop ax
+    mov  al, 23 
+    call FormatInHex
+    add  EDI, 2
+    pop  ax
     ret
-    code001:
-    sub al, 1
+code001:
+    sub  al, 1
     push ax
-    mov al, 10 ;; A
-    call maths
-    add EDI, 2
-    pop ax
-    ret
-endp
-
-codexpr proc
-    cmp al, 2
-    jge code01
-    push ax
-    mov al, 14 ;; E
-    call maths
-    add EDI, 2
-    pop ax
-    call anyxxpr
-    ret
-    code01:
-    sub al, 2
-    push ax
-    mov al, 27 ;; R
-    call maths
-    add EDI, 2
-    pop ax
-    call anyxxpr
+    mov  al, 10  
+    call FormatInHex
+    add  EDI, 2
+    pop  ax
     ret
 endp
 
-codepr proc
-    cmp al, 4
-    jge code1
+PrintCodeClassification proc
+    cmp  al, 2
+    jge  code01
     push ax
-    mov al, 23 ;; N
-    call maths
-    add EDI, 2
-    pop ax
-    call codexpr
+    mov  al, 14  
+    call FormatInHex
+    add  EDI, 2
+    pop  ax
+    call ShowGeneralAttr
     ret
-    code1:
-    sub al, 4
+code01:
+    sub  al, 2
     push ax
-    mov al, 12 ;; N
-    call maths
-    add EDI, 2
-    pop ax
-    call codexpr
+    mov  al, 27  
+    call FormatInHex
+    add  EDI, 2
+    pop  ax
+    call ShowGeneralAttr
     ret
 endp
 
-modepr proc
+ShowCodeProperties proc
+    cmp  al, 4
+    jge  code1
+    push ax
+    mov  al, 23 
+    call FormatInHex
+    add  EDI, 2
+    pop  ax
+    call PrintCodeClassification
+    ret
+code1:
+    sub  al, 4
+    push ax
+    mov  al, 12 
+    call FormatInHex
+    add  EDI, 2
+    pop  ax
+    call PrintCodeClassification
+    ret
+endp
+
+DisplayModeInfo proc
     push eax
     push ebx
     push ecx
     push edx
-    cmp al, 8
-    jge code
+    cmp  al, 8
+    jge  isCode
     push ax
-    mov al, 13  ;; D
-    call maths
-    add EDI, 2
-    pop ax
-    call datapr
-    jmp return
-    code:
-    sub al, 8
+    mov  al, 13  
+    call FormatInHex
+    add  EDI, 2
+    pop  ax
+    call ShowDataProperties
+    jmp  retHere
+isCode:
+    sub  al, 8
     push ax
-    mov al, 12  ;; C
-    call maths
-    add EDI, 2
-    pop ax
-    call codepr
-    return:
-    pop edx
-    pop ecx
-    pop ebx
-    pop eax
+    mov  al, 12  
+    call FormatInHex
+    add  EDI, 2
+    pop  ax
+    call ShowCodeProperties
+retHere:
+    pop  edx
+    pop  ecx
+    pop  ebx
+    pop  eax
     ret
 endp
 
-logic proc ;;EDX - адрес регистра, BX - оффсет в видеопамяти
+ParseDescriptorEntry proc  
     push edx
-    call base
-    mov EDI, 012000h
-    add EDI, eBX
-    call basepr
-    add edi, 2
-    call limit
-    call basepr
-    add edi, 2
-    call mode
-    call modepr
-    add edi, 2
-    call dls
-    call dlspr
-    add edi, 2
-    call present
-    call maths
-    add edi, 4
-    call avl
-    call maths
-    add edi, 4
-    call bits
-    call maths
-    pop edx
-    ret
-endp 
-
-
-ENTRY_POINT:
-; загрузим сегментные регистры селекторами на соответствующие дескрипторы:
-                 mov           AX,00010000b      ; селектор на второй дескриптор (DATA_descr)
-     mov           DS,AX                         ; в DS его        
-     mov           ES,AX                         ; его же - в ES
-
-
- 
-; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-; создать каталог страниц
-                mov        EDI,00100000h               ; его физический адрес - 1 Мб
-    mov        EAX,00101007h               ; адрес таблицы 0 = 1 Мб + 4 Кб
-    stosd                              ; записать первый элемент каталога
-    mov        ECX,1023                    ; остальные элементы каталога -
-    xor        EAX,EAX                     ; нули
-    rep                 stosd
-; заполнить таблицу страниц 0
-                mov        EAX,00000007h               ; 0 - адрес страницы 0
-    mov        ECX,1024                    ; число страниц в таблице
-fill_page_table:
-    stosd                              ; записать элемент таблицы
-    add        EAX,00001000h               ; добавить к адресу 4096 байтов
-    loop                fill_page_table        ; и повторить для всех элементов
-; поместить адрес каталога страниц в CR3
-                mov        EAX,00100000h               ; базовый адрес = 1 Мб
-    mov        CR3,EAX
-; включить страничную адресацию,
-                mov        EAX,CR0
- or        EAX,80000000h
-     mov           CR0,EAX
-; а теперь изменить физический адрес страницы 12000h на 0B8000h
-                mov        EAX,000B8007h
-    mov        ES:00101000h+012h*4,EAX
-
-        xor     EAX,EAX
-        sgdt    fword ptr GDTAddr
-        mov     di, offset GDTAddr
-        mov     ax, word ptr [di]
-        add     di, 2
-        mov     edx, dword ptr [di]
-        inc     ax
-        mov ch, 8
-        div     ch
-        mov cl, al
-        mov ch, 0
-        xor ebx, ebx
-        mov BX, 640
-        cycle: ;; CL CH - контроль цикла, EDX - адресс таблицы, BX - оффсет в видеопамяти
-            call logic
-            add edx, 8
-            add bx, 160
-            inc ch
-            cmp cl, ch
-            jne cycle 
-; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-mess1:
-; вывод mes1 по стандартному адресу (начало видеопамяти 0B8000h)
-    mov            EDI,012000h                ; для команды movsw, EDI = начало видепамяти
-    mov            ESI,PM_DATA                 ;
-    shl            ESI,4
-    add            ESI,offset mes1             ; ESI = адрес начала mes1
-    mov            ECX,mes_len                 ; длина текста в ECX
-    rep            movsw                       ; DS:ESI (наше сообщение) -> ES:EDI
-                                               ; (видеопамять)
-; вывод mes2 по НЕСТАНДАРТНОМУ АДРЕСУ 12000h:
-mess2:
-    mov            EDI,0120A0h     ; 12000h (уже можешь считать, что это
-                                    ; 0B8000h) + A0h
-    mov            ESI,PM_DATA
-    shl            ESI,4
-    add            ESI,offset mes2 ; ESI = адрес начала mes2
-    mov            ECX,mes_len     ; длина текста в ECX
-    rep            movsw           ; DS:ESI (наше сообщение) -> ES:12000h
-                                               ;(типа видеопамять)
     
-    mov            EDI,012140h     ; 12000h (уже можешь считать, что это
-                                    ; 0B8000h) + A0h
-    mov            ESI,PM_DATA
-    shl            ESI,4
-    add            ESI,offset mes3 ; ESI = адрес начала mes2
-    mov            ECX,mes_len     ; длина текста в ECX
-    rep            movsw           ; DS:ESI (наше сообщение) -> ES:12000h
-                                               ;(типа видеопамять)
-    mov            EDI,0121E0h     ; 12000h (уже можешь считать, что это
-                                    ; 0B8000h) + A0h
-    mov            ESI,PM_DATA
-    shl            ESI,4
-    add            ESI,offset mes4 ; ESI = адрес начала mes2
-    mov            ECX,mes_len     ; длина текста в ECX
-    rep            movsw           ; DS:ESI (наше сообщение) -> ES:12000h
-                                               ;(типа видеопамять)
- 
- 
-    jmp            $                           ; погружаемся в вечный цикл
-PM_CODE         ends
-; -------------------------------------------------------------------------------------
- 
- 
-; СЕГМЕНТ ДАННЫХ (для Protected Mode)
-; -------------------------------------------------------------------------------------
-PM_DATA         segment        para public 'DATA' use32
-        assume         CS:PM_DATA
- 
-GDTAddr dw ?
-        dd ?
-; сообщение, которое мы будем выводить на экран (оформим его в виде блока повторений irpc):
-mes1:
-irpc            mes1,          <1st block - BASE address, 2nd - LIMIT, 3rd - MODE,                              >
-                db             '&mes1&',0Bh
+    call CheckPresenceFlag
+    cmp al, 0
+    je invalid_descriptor
+    
+    call IdentifySegMode
+    cmp al, 0
+    je check_null_desc
+    
+normal_descriptor:
+    call AcquireSegmentBase
+    mov  EDI, 012000h
+    add  EDI, EBX
+    call PresentBaseValue
+    add  EDI, 2
+    call ComputeSegLimit
+    call PresentBaseValue
+    add  EDI, 2
+    call IdentifySegMode
+    call DisplayModeInfo
+    add  EDI, 2
+    call UnpackDLSField
+    call DisplayDLSValue
+    add  EDI, 2
+    call CheckPresenceFlag
+    call FormatInHex
+    add  EDI, 4
+    call EvaluateAVLBit
+    call FormatInHex
+    add  EDI, 4
+    call RetrieveGranularity
+    call FormatInHex
+    jmp proc_end
+    
+check_null_desc:
+    cmp edx, offset NullDescriptor
+    je normal_descriptor
+    
+invalid_descriptor:
+    mov  EDI, 012000h
+    add  EDI, EBX
+    push eax
+    push ecx
+    mov  ecx, 20
+    mov  al, '#'
+invalid_loop:
+    mov  [edi], al
+    mov  byte ptr [edi+1], 0Eh
+    add  edi, 2
+    loop invalid_loop
+    pop  ecx
+    pop  eax
+
+proc_end:
+    pop  edx
+    ret
+endp
+
+BeginProtectedMode:
+                mov     AX, 00010000b 
+                mov     DS, AX
+                mov     ES, AX
+                mov     EDI, 00100000h 
+                mov     EAX, 00101007h 
+                stosd
+                mov     ECX, 1023
+                xor     EAX, EAX
+                rep     stosd
+                mov     EAX, 00000007h
+                mov     ECX, 1024
+FillPageLoop:
+                stosd
+                add     EAX, 00001000h
+                loop    FillPageLoop
+                mov     EAX, 00100000h
+                mov     CR3, EAX
+                mov     EAX, CR0
+                or      EAX, 80000000h
+                mov     CR0, EAX
+                mov     EAX, 000B8007h
+                mov     ES:00101000h+(012h*4), EAX
+                xor     EAX, EAX
+                sgdt    fword ptr GlobalTablePtr
+                mov     DI, offset GlobalTablePtr
+                mov     AX, word ptr [DI]
+                add     DI, 2
+                mov     EDX, dword ptr [DI]
+                inc     AX
+                mov     CH, 8
+                div     CH
+                mov     CL, AL
+                mov     CH, 0
+                xor     EBX, EBX
+                mov     BX, 640
+
+IterateDescEntries:
+                call    ParseDescriptorEntry
+                add     EDX, 8
+                add     BX, 160
+                inc     CH
+                cmp     CL, CH
+                jne     IterateDescEntries
+
+PrintBlock1:
+                mov     EDI, 012000h
+                mov     ESI, MainPMData
+                shl     ESI, 4
+                add     ESI, offset descInfoA
+                mov     ECX, descInfoSize
+                rep     movsw
+
+PrintBlock2:
+                mov     EDI, 0120A0h
+                mov     ESI, MainPMData
+                shl     ESI, 4
+                add     ESI, offset descInfoB
+                mov     ECX, descInfoSize
+                rep     movsw
+
+PrintBlock3:
+                mov     EDI, 012140h
+                mov     ESI, MainPMData
+                shl     ESI, 4
+                add     ESI, offset descInfoC
+                mov     ECX, descInfoSize
+                rep     movsw
+
+PrintBlock4:
+                mov     EDI, 0121E0h
+                mov     ESI, MainPMData
+                shl     ESI, 4
+                add     ESI, offset descInfoD
+                mov     ECX, descInfoSize
+                rep     movsw
+                jmp     $
+
+MainPMSegment ends
+
+MainPMData segment para public 'DATA' use32
+        assume CS:MainPMData
+
+GlobalTablePtr    dw ?
+                  dd ?
+
+descInfoA:
+irpc textA, <Segment BASE Info, Next is LIMIT, Then We Check MODE.                                    >
+    db '&textA&',0Ah
 endm
-mes2:
-irpc            mes2,          <Mode - D(ata)/C(ode), (Up)/(Down)/C(onformed)/N(ot conformed),                  >
-                db             '&mes2&',0Bh
+
+descInfoB:
+irpc textB, <Descriptor Type: D or C, Growth: Up/Down, Conformance Bits.                              >
+    db '&textB&',0Ah
 endm
-mes3:
-irpc            mes3,          <R(ead)/W(rite + read)/E(xecute only) A(vailable)/N(ot available)               >
-                db             '&mes3&',0Bh
+
+descInfoC:
+irpc textC, <R/W/E Allowed or Not, Also Checking User-Bit: A/N.                                       >
+    db '&textC&',0Ah
 endm
-mes4:
-irpc            mes4,          <DPL (00 - 11), Present (0/1), Available bit (0/1), 0/1 32-bit mode              >
-                db             '&mes4&',0Bh
+
+descInfoD:
+irpc textD, <Privilege (0..3), Presence Flag, AVL Bit, 16/32 mode.                                    >
+    db '&textD&',0Ah
 endm
-mes_len         equ            80                  ; длина в байтах
-PM_DATA         ends
-; ----------------------------------------------------------------------------------------------  
-                end         @@start
+
+descInfoSize equ 80
+
+MainPMData ends
+
+                end     RealInitEntry
